@@ -1,0 +1,12 @@
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\bin\Debug\net10.0\AeroCompliance.ServiceDefaults.deps.json
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\bin\Debug\net10.0\AeroCompliance.ServiceDefaults.dll
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\bin\Debug\net10.0\AeroCompliance.ServiceDefaults.pdb
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\obj\Debug\net10.0\AeroCompliance.ServiceDefaults.csproj.AssemblyReference.cache
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\obj\Debug\net10.0\AeroCompliance.ServiceDefaults.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\obj\Debug\net10.0\AeroCompliance.ServiceDefaults.AssemblyInfoInputs.cache
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\obj\Debug\net10.0\AeroCompliance.ServiceDefaults.AssemblyInfo.cs
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\obj\Debug\net10.0\AeroCompliance.ServiceDefaults.csproj.CoreCompileInputs.cache
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\obj\Debug\net10.0\AeroCompliance.ServiceDefaults.dll
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\obj\Debug\net10.0\refint\AeroCompliance.ServiceDefaults.dll
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\obj\Debug\net10.0\AeroCompliance.ServiceDefaults.pdb
+C:\Users\tala3\TalaProjects\DroneProject\src\AeroCompliance.ServiceDefaults\obj\Debug\net10.0\ref\AeroCompliance.ServiceDefaults.dll

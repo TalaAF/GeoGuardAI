@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AeroCompliance.ApiService/AeroCompliance.ApiService.csproj" />
+    <Project Path="src/AeroCompliance.AppHost/AeroCompliance.AppHost.csproj" />
+    <Project Path="src/AeroCompliance.Contracts/AeroCompliance.Contracts.csproj" />
+    <Project Path="src/AeroCompliance.Domain/AeroCompliance.Domain.csproj" />
+    <Project Path="src/AeroCompliance.Infrastructure/AeroCompliance.Infrastructure.csproj" />
+    <Project Path="src/AeroCompliance.IngestionService/AeroCompliance.IngestionService.csproj" />
+    <Project Path="src/AeroCompliance.ServiceDefaults/AeroCompliance.ServiceDefaults.csproj" />
+  </Folder>
+</Solution>

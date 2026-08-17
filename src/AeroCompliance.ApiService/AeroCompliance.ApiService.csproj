@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.4.6" />
+    <PackageReference Include="Aspire.RabbitMQ.Client" Version="13.4.6" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+    <!-- Unify EF Core to 10.0.10 (Aspire's Npgsql EF integration pulls 10.0.8 transitively). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AeroCompliance.ServiceDefaults\AeroCompliance.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\AeroCompliance.Infrastructure\AeroCompliance.Infrastructure.csproj" />
+    <ProjectReference Include="..\AeroCompliance.Domain\AeroCompliance.Domain.csproj" />
+    <ProjectReference Include="..\AeroCompliance.Contracts\AeroCompliance.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>
