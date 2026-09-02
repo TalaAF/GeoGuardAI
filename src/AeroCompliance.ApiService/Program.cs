@@ -47,7 +47,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "AeroCompliance API",
         Version = "v1",
-        Description = "Drone-based municipal compliance platform — Epic 1 scaffold."
+        Description = "Drone-based municipal compliance platform core API."
     });
 
     // Wire the Bearer scheme into Swagger so the "Authorize" button works.
