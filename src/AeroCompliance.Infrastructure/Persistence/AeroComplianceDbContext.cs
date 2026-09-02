@@ -32,12 +32,16 @@ public class AeroComplianceDbContext(DbContextOptions<AeroComplianceDbContext> o
     public DbSet<Image> Images => Set<Image>();
     public DbSet<Video> Videos => Set<Video>();
     public DbSet<Orthomosaic> Orthomosaics => Set<Orthomosaic>();
+    public DbSet<ImageAnalysis> ImageAnalyses => Set<ImageAnalysis>();
 
     // AI + violations
     public DbSet<Detection> Detections => Set<Detection>();
     public DbSet<Violation> Violations => Set<Violation>();
     public DbSet<ViolationStatus> ViolationStatuses => Set<ViolationStatus>();
     public DbSet<ViolationStatusHistory> ViolationStatusHistory => Set<ViolationStatusHistory>();
+    public DbSet<ComplianceEvaluation> ComplianceEvaluations => Set<ComplianceEvaluation>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
     // Reporting / notifications / audit
     public DbSet<Report> Reports => Set<Report>();

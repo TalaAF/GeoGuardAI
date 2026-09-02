@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\AeroCompliance.ApiService\AeroCompliance.ApiService.csproj" />
     <ProjectReference Include="..\AeroCompliance.IngestionService\AeroCompliance.IngestionService.csproj" />
+    <ProjectReference Include="..\AeroCompliance.ProcessingService\AeroCompliance.ProcessingService.csproj" />
   </ItemGroup>
 
   <ItemGroup>

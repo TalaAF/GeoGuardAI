@@ -97,10 +97,15 @@ public class ImageConfiguration : IEntityTypeConfiguration<Image>
         b.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuid_generate_v4()");
         b.Property(x => x.FlightId).HasColumnName("flight_id").IsRequired();
         b.Property(x => x.StoragePath).HasColumnName("storage_path").IsRequired();
+        b.Property(x => x.Bucket).HasColumnName("bucket").HasMaxLength(100).IsRequired();
+        b.Property(x => x.ObjectKey).HasColumnName("object_key").HasMaxLength(1024).IsRequired();
+        b.Property(x => x.OriginalFileName).HasColumnName("original_file_name").HasMaxLength(255).IsRequired();
+        b.Property(x => x.ContentType).HasColumnName("content_type").HasMaxLength(100).IsRequired();
+        b.Property(x => x.ByteLength).HasColumnName("byte_length").IsRequired();
         b.Property(x => x.Sha256Hash).HasColumnName("sha256_hash").HasColumnType("char(64)").IsRequired();
         b.Property(x => x.CapturedAt).HasColumnName("captured_at").IsRequired();
-        b.Property(x => x.Latitude).HasColumnName("latitude").IsRequired();
-        b.Property(x => x.Longitude).HasColumnName("longitude").IsRequired();
+        b.Property(x => x.Latitude).HasColumnName("latitude");
+        b.Property(x => x.Longitude).HasColumnName("longitude");
         b.Property(x => x.AltitudeM).HasColumnName("altitude_m").HasColumnType("numeric(8,2)");
         b.Property(x => x.CameraHeadingDeg).HasColumnName("camera_heading_deg").HasColumnType("numeric(6,2)");
         b.Property(x => x.GpsAccuracyCm).HasColumnName("gps_accuracy_cm").HasColumnType("numeric(6,2)");
@@ -113,10 +118,24 @@ public class ImageConfiguration : IEntityTypeConfiguration<Image>
             .HasComputedColumnSql("ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)", stored: true);
 
         b.Property(x => x.IsPartOfOrtho).HasColumnName("is_part_of_ortho").HasDefaultValue(false);
+        b.Property(x => x.UploadCompletedAt).HasColumnName("upload_completed_at");
+        b.Property(x => x.ProcessingStatus).HasColumnName("processing_status").HasMaxLength(40).HasConversion<string>().IsRequired();
+        b.Property(x => x.ProcessingRequestId).HasColumnName("processing_request_id");
+        b.Property(x => x.AttemptCount).HasColumnName("attempt_count").HasDefaultValue(0);
+        b.Property(x => x.QueuedAt).HasColumnName("queued_at");
+        b.Property(x => x.ProcessingStartedAt).HasColumnName("processing_started_at");
+        b.Property(x => x.ProcessingCompletedAt).HasColumnName("processing_completed_at");
+        b.Property(x => x.LastErrorCode).HasColumnName("last_error_code").HasMaxLength(100);
+        b.Property(x => x.LastErrorMessage).HasColumnName("last_error_message").HasMaxLength(1000);
+        b.Property(x => x.SourceRasterCrs).HasColumnName("source_raster_crs").HasMaxLength(100);
+        b.Property(x => x.RasterWidth).HasColumnName("raster_width");
+        b.Property(x => x.RasterHeight).HasColumnName("raster_height");
+        b.Property(x => x.AffineTransform).HasColumnName("affine_transform").HasColumnType("jsonb");
         b.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
 
         b.HasIndex(x => x.Geom).HasMethod("gist");
         b.HasIndex(x => x.FlightId);
+        b.HasIndex(x => x.ProcessingRequestId).IsUnique();
 
         b.HasOne(x => x.Flight)
             .WithMany(f => f.Images)

@@ -10,6 +10,11 @@ public class Detection
 {
     public Guid Id { get; set; }
 
+    public Guid? ImageAnalysisId { get; set; }
+    public ImageAnalysis? ImageAnalysis { get; set; }
+    public Guid? ExternalDetectionId { get; set; }
+    public int? ClassId { get; set; }
+
     public Guid? OrthomosaicId { get; set; }
     public Orthomosaic? Orthomosaic { get; set; }
 
@@ -34,4 +39,6 @@ public class Detection
     public string ModelName { get; set; } = null!;
     public string ModelVersion { get; set; } = null!;
     public DateTimeOffset CreatedAt { get; set; }
+
+    public ICollection<ComplianceEvaluation> ComplianceEvaluations { get; set; } = new List<ComplianceEvaluation>();
 }

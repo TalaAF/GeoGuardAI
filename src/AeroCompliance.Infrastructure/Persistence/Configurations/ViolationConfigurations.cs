@@ -15,6 +15,9 @@ public class DetectionConfiguration : IEntityTypeConfiguration<Detection>
         });
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuid_generate_v4()");
+        b.Property(x => x.ImageAnalysisId).HasColumnName("image_analysis_id");
+        b.Property(x => x.ExternalDetectionId).HasColumnName("external_detection_id");
+        b.Property(x => x.ClassId).HasColumnName("class_id");
         b.Property(x => x.OrthomosaicId).HasColumnName("orthomosaic_id");
         b.Property(x => x.ImageId).HasColumnName("image_id");
         b.Property(x => x.ClassLabel).HasColumnName("class_label").HasMaxLength(50).IsRequired();
@@ -29,6 +32,12 @@ public class DetectionConfiguration : IEntityTypeConfiguration<Detection>
 
         b.HasIndex(x => x.Geom).HasMethod("gist");
         b.HasIndex(x => x.ClassLabel);
+        b.HasIndex(x => new { x.ImageAnalysisId, x.ExternalDetectionId }).IsUnique();
+
+        b.HasOne(x => x.ImageAnalysis)
+            .WithMany(x => x.Detections)
+            .HasForeignKey(x => x.ImageAnalysisId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         b.HasOne(x => x.Orthomosaic)
             .WithMany(o => o.Detections)
@@ -74,6 +83,7 @@ public class ViolationConfiguration : IEntityTypeConfiguration<Violation>
         b.ToTable("violations");
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuid_generate_v4()");
+        b.Property(x => x.ComplianceEvaluationId).HasColumnName("compliance_evaluation_id");
         b.Property(x => x.DetectionId).HasColumnName("detection_id").IsRequired();
         b.Property(x => x.ParcelId).HasColumnName("parcel_id");
         b.Property(x => x.RoadId).HasColumnName("road_id");
@@ -96,6 +106,10 @@ public class ViolationConfiguration : IEntityTypeConfiguration<Violation>
         b.HasIndex(x => x.Geom).HasMethod("gist");
         b.HasIndex(x => x.CurrentStatusId);
         b.HasIndex(x => x.ParcelId);
+        b.HasIndex(x => x.ComplianceEvaluationId).IsUnique();
+
+        b.HasOne(x => x.ComplianceEvaluation).WithOne(x => x.Violation)
+            .HasForeignKey<Violation>(x => x.ComplianceEvaluationId).OnDelete(DeleteBehavior.Restrict);
 
         b.HasOne(x => x.Detection).WithMany().HasForeignKey(x => x.DetectionId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.Parcel).WithMany().HasForeignKey(x => x.ParcelId).OnDelete(DeleteBehavior.Restrict);

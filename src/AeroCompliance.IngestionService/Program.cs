@@ -30,6 +30,7 @@ if (app.Environment.IsDevelopment())
 
 // Minimal ingestion endpoint skeleton: records image metadata and publishes an ImageUploaded
 // event. Epic 1: no multipart file receipt or MinIO storage yet.
+if (builder.Configuration.GetValue<bool>("LegacyIngestion:Enabled"))
 app.MapPost("/api/ingestion/images", async (
     ImageUploadRequest request,
     IImageEventPublisher publisher,

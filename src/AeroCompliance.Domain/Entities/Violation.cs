@@ -9,6 +9,9 @@ public class Violation
 {
     public Guid Id { get; set; }
 
+    public Guid? ComplianceEvaluationId { get; set; }
+    public ComplianceEvaluation? ComplianceEvaluation { get; set; }
+
     public Guid DetectionId { get; set; }
     public Detection Detection { get; set; } = null!;
 

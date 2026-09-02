@@ -1,0 +1,37 @@
+using AeroCompliance.ApiService.Services;
+using AeroCompliance.Contracts.Dtos.Common;
+using AeroCompliance.Contracts.Dtos.Images;
+using AeroCompliance.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace AeroCompliance.ApiService.Controllers;
+
+[ApiController, Route("api/detections"), Authorize]
+public sealed class DetectionsController(AeroComplianceDbContext db, ICurrentUserContext user) : ControllerBase
+{
+    [HttpGet]
+    public async Task<ActionResult<PagedResponse<DetectionSummaryDto>>> List(int page = 1, int pageSize = 25, Guid? imageId = null,
+        Guid? flightId = null, string? className = null, decimal? minConfidence = null, CancellationToken ct = default)
+    {
+        if (!ApiSupport.IsValidPagination(page, pageSize)) return Problem(statusCode: 400, title: "Invalid pagination");
+        var q = Visible().AsNoTracking().Where(x => x.ImageId != null);
+        if (imageId.HasValue) q = q.Where(x => x.ImageId == imageId); if (flightId.HasValue) q = q.Where(x => x.Image!.FlightId == flightId);
+        if (!string.IsNullOrWhiteSpace(className)) q = q.Where(x => x.ClassLabel == className.Trim()); if (minConfidence.HasValue) q = q.Where(x => x.Confidence >= minConfidence);
+        var total = await q.CountAsync(ct); var rows = await q.OrderByDescending(x => x.CreatedAt).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return Ok(new PagedResponse<DetectionSummaryDto>(rows.Select(x => new DetectionSummaryDto(x.Id, x.ImageId!.Value, x.ImageAnalysisId, x.ClassId,
+            x.ClassLabel, x.Confidence, GeoJsonService.Write(x.Geom), x.CreatedAt)).ToList(), page, pageSize, total, total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize)));
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<DetectionDetailsDto>> Get(Guid id, CancellationToken ct)
+    {
+        var x = await Visible().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.ImageId != null, ct); if (x is null) return NotFound();
+        return Ok(new DetectionDetailsDto(x.Id, x.ImageId!.Value, x.ImageAnalysisId, x.ExternalDetectionId, x.ClassId, x.ClassLabel,
+            x.Confidence, GeoJsonService.Write(x.Geom), x.AreaM2, x.PerimeterM, x.HeightM, x.ModelName, x.ModelVersion, x.CreatedAt));
+    }
+    private IQueryable<AeroCompliance.Domain.Entities.Detection> Visible() => user.IsPlatformAdmin ? db.Detections : db.Detections.Where(x =>
+        (x.Image != null && x.Image.Flight.MunicipalityId == user.MunicipalityId) ||
+        (x.Orthomosaic != null && x.Orthomosaic.Flight.MunicipalityId == user.MunicipalityId));
+}

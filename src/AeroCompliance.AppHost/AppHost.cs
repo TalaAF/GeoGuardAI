@@ -19,7 +19,7 @@ var postgresPassword = builder.AddParameter("postgres-password", secret: true);
 var postgres = builder.AddPostgres("postgres", password: postgresPassword)
     .WithImage("postgis/postgis")
     .WithImageTag("16-3.4")
-    .WithDataVolume("aerocompliance-pgdata")
+    .WithDataVolume("aerocompliance-pgdata-v2")
     .WithPgAdmin(); // local inspection UI
 
 var aeroDb = postgres.AddDatabase("aerocompliancedb");
@@ -31,7 +31,7 @@ var rabbitUser = builder.AddParameter("rabbitmq-user", secret: true);
 var rabbitPassword = builder.AddParameter("rabbitmq-password", secret: true);
 
 var rabbitmq = builder.AddRabbitMQ("messaging", rabbitUser, rabbitPassword)
-    .WithDataVolume("aerocompliance-rabbitdata")
+    .WithDataVolume("aerocompliance-rabbitdata-v2")
     .WithManagementPlugin(); // exposes the RabbitMQ management UI
 
 // ---------------------------------------------------------------------------
@@ -61,15 +61,30 @@ var apiService = builder.AddProject<Projects.AeroCompliance_ApiService>("apiserv
     .WithEnvironment("MinIO__Endpoint", minioS3Endpoint)
     .WithEnvironment("MinIO__AccessKey", minioRootUser)
     .WithEnvironment("MinIO__SecretKey", minioRootPassword)
+    .WithEnvironment("MinIO__Bucket", "aerocompliance-images")
     .WaitFor(minio);
 
-builder.AddProject<Projects.AeroCompliance_IngestionService>("ingestionservice")
+builder.AddProject<Projects.AeroCompliance_ProcessingService>("processingservice")
     .WithReference(aeroDb).WaitFor(aeroDb)
     .WithReference(rabbitmq).WaitFor(rabbitmq)
-    .WithReference(apiService) // may call the API for validation/lookups later
-    .WithEnvironment("MinIO__Endpoint", minioS3Endpoint)
-    .WithEnvironment("MinIO__AccessKey", minioRootUser)
-    .WithEnvironment("MinIO__SecretKey", minioRootPassword)
+    .WaitFor(apiService);
+
+builder.AddContainer("aiworker", "aerocompliance-ai-worker")
+    .WithDockerfile("../AeroCompliance.AiWorker")
+    .WithReference(rabbitmq)
+    .WithEnvironment("AI_MODE", "mock")
+    .WithEnvironment("AI_MODEL_PATH", "/models/model.pt")
+    .WithEnvironment("AI_CONFIDENCE_THRESHOLD", "0.50")
+    .WithEnvironment("AI_MODEL_NAME", "aerocompliance-mock")
+    .WithEnvironment("AI_MODEL_VERSION", "1.0")
+    .WithEnvironment("MINIO_ENDPOINT", minioS3Endpoint)
+    .WithEnvironment("MINIO_ACCESS_KEY", minioRootUser)
+    .WithEnvironment("MINIO_SECRET_KEY", minioRootPassword)
+    .WithEnvironment("MINIO_SECURE", "false")
+    .WithEnvironment("MINIO_BUCKET", "aerocompliance-images")
+    .WithHttpEndpoint(targetPort: 8080, name: "http")
+    .WithHttpHealthCheck("/ready")
+    .WaitFor(rabbitmq)
     .WaitFor(minio);
 
 builder.Build().Run();

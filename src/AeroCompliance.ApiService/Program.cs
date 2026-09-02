@@ -7,6 +7,8 @@ using AeroCompliance.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using AeroCompliance.Infrastructure.Storage;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +33,10 @@ builder.Services.AddAeroComplianceAuthorization();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
 builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddSingleton<IObjectStorage, MinioObjectStorage>();
+builder.Services.AddHostedService<ProcessingOutboxDispatcher>();
+builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit =
+    builder.Configuration.GetValue<long?>("Uploads:MaxBytes") ?? 262_144_000);
 
 // Password hashing (Identity's PasswordHasher only — not the full Identity stack) + auth services.
 builder.Services.AddSingleton<PasswordHasher<User>>();
