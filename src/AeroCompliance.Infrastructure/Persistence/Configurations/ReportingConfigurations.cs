@@ -87,6 +87,7 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasColumnName("id").UseIdentityByDefaultColumn(); // BIGSERIAL
         b.Property(x => x.ActorId).HasColumnName("actor_id");
+        b.Property(x => x.MunicipalityId).HasColumnName("municipality_id");
         b.Property(x => x.Action).HasColumnName("action").HasMaxLength(100).IsRequired();
         b.Property(x => x.EntityType).HasColumnName("entity_type").HasMaxLength(50).IsRequired();
         b.Property(x => x.EntityId).HasColumnName("entity_id");
@@ -97,10 +98,16 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
 
         b.HasIndex(x => new { x.EntityType, x.EntityId });
         b.HasIndex(x => x.ActorId);
+        b.HasIndex(x => x.MunicipalityId);
 
         b.HasOne(x => x.Actor)
             .WithMany()
             .HasForeignKey(x => x.ActorId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        b.HasOne(x => x.Municipality)
+            .WithMany()
+            .HasForeignKey(x => x.MunicipalityId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

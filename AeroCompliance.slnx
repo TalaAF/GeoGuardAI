@@ -8,4 +8,8 @@
     <Project Path="src/AeroCompliance.IngestionService/AeroCompliance.IngestionService.csproj" />
     <Project Path="src/AeroCompliance.ServiceDefaults/AeroCompliance.ServiceDefaults.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AeroCompliance.UnitTests/AeroCompliance.UnitTests.csproj" />
+    <Project Path="tests/AeroCompliance.IntegrationTests/AeroCompliance.IntegrationTests.csproj" />
+  </Folder>
 </Solution>

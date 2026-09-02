@@ -1,34 +1,11 @@
-using AeroCompliance.ApiService.Authorization;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-
+using AeroCompliance.ApiService.Authorization; using AeroCompliance.ApiService.Services; using AeroCompliance.Contracts.Dtos.Common; using AeroCompliance.Contracts.Dtos.Operations; using AeroCompliance.Domain.Entities; using AeroCompliance.Infrastructure.Persistence; using Microsoft.AspNetCore.Authorization; using Microsoft.AspNetCore.Mvc; using Microsoft.EntityFrameworkCore;
 namespace AeroCompliance.ApiService.Controllers;
-
-/// <summary>Violation review workflow. Epic 1: route + authorization stubs only.</summary>
-[ApiController]
-[Route("api/violations")]
-[Authorize]
-public class ViolationsController : ControllerBase
+[ApiController,Route("api/violations"),Authorize] public sealed class ViolationsController(AeroComplianceDbContext db,ICurrentUserContext user,IAuditService audit):ControllerBase
 {
-    /// <summary>List violations (optionally filtered — later).</summary>
-    [HttpGet]
-    public IActionResult GetAll()
-        => StatusCode(StatusCodes.Status501NotImplemented);
-
-    /// <summary>Get a single violation with its status history.</summary>
-    [HttpGet("{id:guid}")]
-    public IActionResult GetById(Guid id)
-        => StatusCode(StatusCodes.Status501NotImplemented);
-
-    /// <summary>Confirm a violation and advance its status (reviewers / inspectors).</summary>
-    [HttpPost("{id:guid}/confirm")]
-    [Authorize(Policy = Policies.ReviewViolations)]
-    public IActionResult Confirm(Guid id)
-        => StatusCode(StatusCodes.Status501NotImplemented);
-
-    /// <summary>Dismiss a violation (reviewers / inspectors).</summary>
-    [HttpPost("{id:guid}/dismiss")]
-    [Authorize(Policy = Policies.ReviewViolations)]
-    public IActionResult Dismiss(Guid id)
-        => StatusCode(StatusCodes.Status501NotImplemented);
+ [HttpGet] public async Task<ActionResult<PagedResponse<ViolationSummaryDto>>> List(int page=1,int pageSize=25,string? status=null,Guid? flightId=null,decimal? minConfidence=null,decimal? maxConfidence=null,DateTimeOffset? from=null,DateTimeOffset? to=null,string? search=null,CancellationToken ct=default){if(!ApiSupport.IsValidPagination(page,pageSize))return Problem(statusCode:400,title:"Invalid pagination");if(minConfidence is<0 or>1||maxConfidence is<0 or>1||minConfidence>maxConfidence)return Problem(statusCode:400,title:"Invalid confidence range");var q=Visible().AsNoTracking();if(!string.IsNullOrWhiteSpace(status))q=q.Where(x=>x.CurrentStatus.Code==status.Trim());if(flightId.HasValue)q=q.Where(x=>(x.Detection.Image!=null&&x.Detection.Image!.FlightId==flightId)||(x.Detection.Orthomosaic!=null&&x.Detection.Orthomosaic!.FlightId==flightId));if(minConfidence.HasValue)q=q.Where(x=>x.AiConfidenceScore>=minConfidence);if(maxConfidence.HasValue)q=q.Where(x=>x.AiConfidenceScore<=maxConfidence);if(from.HasValue)q=q.Where(x=>x.CreatedAt>=from);if(to.HasValue)q=q.Where(x=>x.CreatedAt<=to);var s=ApiSupport.NormalizeSearch(search);if(s is not null)q=q.Where(x=>x.ViolationType.ToLower().Contains(s)||x.Id.ToString().Contains(s));return Ok(await q.OrderByDescending(x=>x.CreatedAt).Select(SummaryExpr()).ToPagedAsync(page,pageSize,ct));}
+ [HttpGet("{id:guid}")] public async Task<ActionResult<ViolationDetailsDto>> Get(Guid id,CancellationToken ct){var x=await Visible().AsNoTracking().Include(x=>x.CurrentStatus).Include(x=>x.Detection).ThenInclude(x=>x.Image).ThenInclude(x=>x!.Flight).Include(x=>x.Detection).ThenInclude(x=>x.Orthomosaic).ThenInclude(x=>x!.Flight).Include(x=>x.EvidenceImage).Include(x=>x.StatusHistory).ThenInclude(x=>x.Status).SingleOrDefaultAsync(x=>x.Id==id,ct);return x is null?NotFound():Ok(Details(x));}
+ [HttpPost("{id:guid}/confirm"),Authorize(Policy=Policies.ReviewViolations)] public Task<ActionResult<ViolationDetailsDto>> Confirm(Guid id,ViolationDecisionRequest r,CancellationToken ct)=>Decide(id,r.Notes,"confirmed_under_notification","violation.confirm",ct);
+ [HttpPost("{id:guid}/dismiss"),Authorize(Policy=Policies.ReviewViolations)] public Task<ActionResult<ViolationDetailsDto>> Dismiss(Guid id,ViolationDecisionRequest r,CancellationToken ct)=>Decide(id,r.Notes,"dismissed","violation.dismiss",ct);
+ private async Task<ActionResult<ViolationDetailsDto>> Decide(Guid id,string notes,string targetCode,string action,CancellationToken ct){var x=await Visible().Include(x=>x.CurrentStatus).Include(x=>x.Detection).ThenInclude(x=>x.Image).ThenInclude(x=>x!.Flight).Include(x=>x.Detection).ThenInclude(x=>x.Orthomosaic).ThenInclude(x=>x!.Flight).Include(x=>x.EvidenceImage).Include(x=>x.StatusHistory).ThenInclude(x=>x.Status).SingleOrDefaultAsync(x=>x.Id==id,ct);if(x is null)return NotFound();if(x.CurrentStatus.Code!="under_review")return Problem(statusCode:409,title:"Invalid violation transition",detail:$"A violation in status '{x.CurrentStatus.Code}' cannot be reviewed again.");var target=await db.ViolationStatuses.SingleAsync(s=>s.Code==targetCode,ct);var before=x.CurrentStatus.Code;var now=DateTimeOffset.UtcNow;x.CurrentStatusId=target.Id;x.CurrentStatus=target;x.UpdatedAt=now;db.ViolationStatusHistory.Add(new ViolationStatusHistory{Id=Guid.NewGuid(),ViolationId=id,StatusId=target.Id,ChangedBy=user.UserId,Notes=notes.Trim(),ChangedAt=now});var tenant=TenantId(x);audit.Add(action,"Violation",id,new{Status=before},new{Status=targetCode,Notes=notes.Trim()},tenant);await db.SaveChangesAsync(ct);return Ok(await ReadDetails(id,ct));}
+ private IQueryable<Violation> Visible(){var q=db.Violations.AsQueryable();return user.IsPlatformAdmin?q:q.Where(x=>(x.Detection.Image!=null&&x.Detection.Image.Flight.MunicipalityId==user.MunicipalityId)||(x.Detection.Orthomosaic!=null&&x.Detection.Orthomosaic.Flight.MunicipalityId==user.MunicipalityId));}private static Guid? TenantId(Violation x)=>x.Detection.Image?.Flight?.MunicipalityId??x.Detection.Orthomosaic?.Flight?.MunicipalityId;private async Task<ViolationDetailsDto?> ReadDetails(Guid id,CancellationToken ct){var x=await Visible().AsNoTracking().Include(x=>x.CurrentStatus).Include(x=>x.Detection).ThenInclude(x=>x.Image).ThenInclude(x=>x!.Flight).Include(x=>x.Detection).ThenInclude(x=>x.Orthomosaic).ThenInclude(x=>x!.Flight).Include(x=>x.EvidenceImage).Include(x=>x.StatusHistory).ThenInclude(x=>x.Status).SingleOrDefaultAsync(x=>x.Id==id,ct);return x is null?null:Details(x);}private static ViolationDetailsDto Details(Violation x)=>new(x.Id,x.ViolationType,x.CurrentStatus.Code,x.AiConfidenceScore,x.MeasuredValue,x.RequiredValue,x.ExceedanceValue,x.ExceedanceAreaM2,x.IsZeroState,x.DetectionId,x.Detection.ClassLabel,x.Detection.Confidence,x.Detection.Image?.FlightId??x.Detection.Orthomosaic?.FlightId,x.ParcelId,x.RoadId,x.ZoneId,x.BlockId,x.RuleId,x.EvidenceImageId,x.EvidenceImage?.StoragePath,x.StatusHistory.OrderBy(h=>h.ChangedAt).Select(h=>new ViolationHistoryDto(h.Status.Code,h.ChangedBy,h.Notes,h.ChangedAt)).ToList(),x.CreatedAt,x.UpdatedAt);private static System.Linq.Expressions.Expression<Func<Violation,ViolationSummaryDto>> SummaryExpr()=>x=>new(x.Id,x.ViolationType,x.CurrentStatus.Code,x.AiConfidenceScore,x.Detection.Image!=null?x.Detection.Image.FlightId:x.Detection.Orthomosaic!=null?x.Detection.Orthomosaic.FlightId:null,x.CreatedAt,x.UpdatedAt);
 }

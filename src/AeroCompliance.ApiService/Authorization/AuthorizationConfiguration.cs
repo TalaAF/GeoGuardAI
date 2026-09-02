@@ -17,7 +17,9 @@ public static class AuthorizationConfiguration
             .AddPolicy(Policies.ManageMunicipalities, p => p.RequireRole(Roles.Admin))
             .AddPolicy(Policies.ReviewViolations, p => p.RequireRole(Roles.Admin, Roles.Reviewer, Roles.Inspector))
             .AddPolicy(Policies.OperateDrone, p => p.RequireRole(Roles.Admin, Roles.DroneOperator))
-            .AddPolicy(Policies.AnalyzeGis, p => p.RequireRole(Roles.Admin, Roles.GISAnalyst));
+            .AddPolicy(Policies.AnalyzeGis, p => p.RequireRole(Roles.Admin, Roles.GISAnalyst))
+            .AddPolicy(Policies.ManageGis, p => p.RequireRole(Roles.Admin, Roles.MunicipalityManager, Roles.GISAnalyst))
+            .AddPolicy(Policies.ManageFlights, p => p.RequireRole(Roles.Admin, Roles.MunicipalityManager, Roles.DroneOperator));
 
         return services;
     }

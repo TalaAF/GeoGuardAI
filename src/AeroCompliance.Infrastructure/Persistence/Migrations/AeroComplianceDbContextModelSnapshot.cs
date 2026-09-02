@@ -73,9 +73,15 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasColumnType("inet")
                         .HasColumnName("ip_address");
 
+                    b.Property<Guid?>("MunicipalityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("municipality_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ActorId");
+
+                    b.HasIndex("MunicipalityId");
 
                     b.HasIndex("EntityType", "EntityId");
 
@@ -1362,6 +1368,10 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("is_validated");
 
+                    b.Property<Guid>("MunicipalityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("municipality_id");
+
                     b.Property<string>("RuleKey")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1402,6 +1412,8 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MunicipalityId");
+
                     b.HasIndex("RuleKey")
                         .HasFilter("is_active = true");
 
@@ -1422,7 +1434,14 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ActorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("AeroCompliance.Domain.Entities.Municipality", "Municipality")
+                        .WithMany()
+                        .HasForeignKey("MunicipalityId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Actor");
+
+                    b.Navigation("Municipality");
                 });
 
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Block", b =>
@@ -1733,6 +1752,12 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AeroCompliance.Domain.Entities.ZoningRule", b =>
                 {
+                    b.HasOne("AeroCompliance.Domain.Entities.Municipality", "Municipality")
+                        .WithMany()
+                        .HasForeignKey("MunicipalityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("AeroCompliance.Domain.Entities.User", "Validator")
                         .WithMany()
                         .HasForeignKey("ValidatedBy")
@@ -1742,6 +1767,8 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .WithMany("ZoningRules")
                         .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Municipality");
 
                     b.Navigation("Validator");
 

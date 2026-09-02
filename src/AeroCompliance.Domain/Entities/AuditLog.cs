@@ -14,6 +14,9 @@ public class AuditLog
     public Guid? ActorId { get; set; }
     public User? Actor { get; set; }
 
+    public Guid? MunicipalityId { get; set; }
+    public Municipality? Municipality { get; set; }
+
     /// <summary>e.g. <c>violation.confirm</c>, <c>rule.validate</c>.</summary>
     public string Action { get; set; } = null!;
     public string EntityType { get; set; } = null!;

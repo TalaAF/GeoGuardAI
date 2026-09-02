@@ -26,8 +26,11 @@ builder.AddNpgsqlDbContext<AeroComplianceDbContext>(
 builder.AddRabbitMQClient(connectionName: "messaging");
 
 // --- AuthN / AuthZ ---------------------------------------------------------
-builder.Services.AddAeroComplianceJwtAuth(builder.Configuration);
+builder.Services.AddAeroComplianceJwtAuth(builder.Configuration, builder.Environment);
 builder.Services.AddAeroComplianceAuthorization();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
+builder.Services.AddScoped<IAuditService, AuditService>();
 
 // Password hashing (Identity's PasswordHasher only — not the full Identity stack) + auth services.
 builder.Services.AddSingleton<PasswordHasher<User>>();
@@ -113,3 +116,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Exposes the generated top-level Program type to WebApplicationFactory integration tests.
+public partial class Program;

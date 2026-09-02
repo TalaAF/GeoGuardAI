@@ -13,7 +13,7 @@ namespace AeroCompliance.ApiService.Services;
 /// Default <see cref="ITokenService"/>. Signs access tokens with the same key the JWT validator uses
 /// (<see cref="JwtOptions.ResolveSigningKey"/>) and generates cryptographically-random refresh tokens.
 /// </summary>
-public sealed class TokenService(IOptions<JwtOptions> options) : ITokenService
+public sealed class TokenService(IOptions<JwtOptions> options, IHostEnvironment environment) : ITokenService
 {
     private readonly JwtOptions _options = options.Value;
 
@@ -22,7 +22,8 @@ public sealed class TokenService(IOptions<JwtOptions> options) : ITokenService
         var now = DateTimeOffset.UtcNow;
         var accessExpires = now.AddMinutes(_options.AccessTokenMinutes);
 
-        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.ResolveSigningKey()));
+        var signingKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(_options.ResolveSigningKey(environment.IsDevelopment())));
         var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
 
         var claims = new List<Claim>
@@ -33,6 +34,11 @@ public sealed class TokenService(IOptions<JwtOptions> options) : ITokenService
             // ClaimTypes.Role is what RequireRole / [Authorize(Roles=...)] checks by default.
             new(ClaimTypes.Role, user.Role.Name)
         };
+
+        if (user.MunicipalityId is Guid municipalityId)
+        {
+            claims.Add(new Claim(AeroComplianceClaimTypes.MunicipalityId, municipalityId.ToString()));
+        }
 
         var jwt = new JwtSecurityToken(
             issuer: _options.Issuer,

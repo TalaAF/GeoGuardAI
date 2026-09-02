@@ -32,4 +32,6 @@ public static class Policies
     public const string ReviewViolations = "ReviewViolations";
     public const string OperateDrone = "OperateDrone";
     public const string AnalyzeGis = "AnalyzeGis";
+    public const string ManageGis = "ManageGis";
+    public const string ManageFlights = "ManageFlights";
 }

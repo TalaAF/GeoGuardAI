@@ -12,14 +12,24 @@ public static class AuthenticationConfiguration
 {
     public static IServiceCollection AddAeroComplianceJwtAuth(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         var jwtSection = configuration.GetSection(JwtOptions.SectionName);
         services.Configure<JwtOptions>(jwtSection);
         var jwtOptions = jwtSection.Get<JwtOptions>() ?? new JwtOptions();
 
         // Same key the token issuer uses (see JwtOptions.ResolveSigningKey) so validation matches issuance.
-        var signingKey = jwtOptions.ResolveSigningKey();
+        if (string.IsNullOrWhiteSpace(jwtOptions.Issuer)
+            || string.IsNullOrWhiteSpace(jwtOptions.Audience)
+            || jwtOptions.AccessTokenMinutes <= 0
+            || jwtOptions.RefreshTokenDays <= 0)
+        {
+            throw new InvalidOperationException(
+                "JWT configuration is invalid: issuer, audience, and positive token lifetimes are required.");
+        }
+
+        var signingKey = jwtOptions.ResolveSigningKey(environment.IsDevelopment());
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>

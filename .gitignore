@@ -1,0 +1,22 @@
+# .NET build outputs
+**/bin/
+**/obj/
+
+# Python generated files and environments
+**/__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.coverage
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Frontend dependencies and build output
+node_modules/
+dist/
+
+# Local AI model weights (keep intentionally versioned fixtures elsewhere unaffected)
+src/AeroCompliance.AiWorker/models/*.pt
