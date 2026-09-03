@@ -87,4 +87,12 @@ builder.AddContainer("aiworker", "aerocompliance-ai-worker")
     .WaitFor(rabbitmq)
     .WaitFor(minio);
 
+builder.AddContainer("frontend", "aerocompliance-frontend")
+    .WithDockerfile("../AeroCompliance.Frontend")
+    .WithReference(apiService)
+    .WithEnvironment("API_UPSTREAM", apiService.GetEndpoint("https"))
+    .WithHttpEndpoint(targetPort: 8080, name: "http")
+    .WithHttpHealthCheck("/health")
+    .WaitFor(apiService);
+
 builder.Build().Run();

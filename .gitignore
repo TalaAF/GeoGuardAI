@@ -17,6 +17,7 @@
 # Frontend dependencies and build output
 node_modules/
 dist/
+*.tsbuildinfo
 
 # Local AI model weights (keep intentionally versioned fixtures elsewhere unaffected)
 src/AeroCompliance.AiWorker/models/*.pt

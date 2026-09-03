@@ -1,0 +1,245 @@
+export type Role =
+  | "Admin"
+  | "MunicipalityManager"
+  | "Inspector"
+  | "GISAnalyst"
+  | "Reviewer"
+  | "DroneOperator";
+export interface Paged<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
+export interface CurrentUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: { id: number; name: Role };
+  municipality: { id: string; name: string } | null;
+  isActive: boolean;
+}
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+  accessTokenExpiresAt: string;
+}
+export interface StatusCount {
+  status: string;
+  count: number;
+}
+export interface ViolationSummary {
+  id: string;
+  violationType: string;
+  status: string;
+  aiConfidenceScore: number;
+  flightId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ViolationHistory {
+  status: string;
+  changedBy: string | null;
+  notes: string | null;
+  changedAt: string;
+}
+export interface ViolationDetails extends ViolationSummary {
+  measuredValue: number | null;
+  requiredValue: number | null;
+  exceedanceValue: number | null;
+  exceedanceAreaM2: number | null;
+  isZeroState: boolean;
+  detectionId: string;
+  detectionClass: string;
+  detectionConfidence: number;
+  parcelId: string | null;
+  roadId: string | null;
+  zoneId: string | null;
+  blockId: string | null;
+  ruleId: string | null;
+  evidenceImageId: string | null;
+  evidenceStoragePath: string | null;
+  statusHistory: ViolationHistory[];
+}
+export interface DashboardSummary {
+  totalFlights: number;
+  images: number;
+  pendingViolations: number;
+  confirmedViolations: number;
+  dismissedViolations: number;
+  completedProcessingCount: number | null;
+  recentViolations: ViolationSummary[];
+  countsByStatus: StatusCount[];
+}
+export interface FlightSummary {
+  id: string;
+  municipalityId: string;
+  droneOperatorId: string;
+  operatorName: string | null;
+  missionName: string | null;
+  status: string;
+  scheduledAt: string | null;
+  createdAt: string;
+}
+export interface FlightDetails extends FlightSummary {
+  plannedArea: unknown | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  weatherConditions: string | null;
+  qualityFlag: boolean;
+  missionCount: number;
+  imageCount: number;
+  videoCount: number;
+  orthomosaicCount: number;
+}
+export interface Mission {
+  id: string;
+  flightId: string;
+  purpose: string | null;
+  altitudeM: number | null;
+  overlapPercent: number | null;
+  notes: string | null;
+}
+export interface ImageInfo {
+  id: string;
+  flightId: string;
+  originalFileName: string;
+  contentType: string;
+  byteLength: number;
+  sha256Hash: string;
+  capturedAt: string;
+  latitude: number | null;
+  longitude: number | null;
+  altitudeM: number | null;
+  cameraHeadingDeg: number | null;
+  gpsAccuracyCm: number | null;
+  processingStatus: string;
+  attemptCount: number;
+  uploadCompletedAt: string | null;
+  createdAt: string;
+}
+export interface ImageReceipt {
+  imageId: string;
+  flightId: string;
+  processingStatus: string;
+  originalFileName: string;
+  byteLength: number;
+  sha256Hash: string;
+  statusUrl: string;
+}
+export interface ProcessingStatus {
+  imageId: string;
+  status: string;
+  requestId: string | null;
+  attemptCount: number;
+  queuedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+export interface Detection {
+  id: string;
+  imageId: string;
+  imageAnalysisId: string | null;
+  externalDetectionId?: string | null;
+  classId: number | null;
+  classLabel: string;
+  confidence: number;
+  geometry: unknown;
+  areaM2?: number | null;
+  perimeterM?: number | null;
+  heightM?: number | null;
+  modelName?: string | null;
+  modelVersion?: string | null;
+  createdAt: string;
+}
+export interface Municipality {
+  id: string;
+  name: string;
+  region: string | null;
+  mouSignedAt: string | null;
+  apiAccessEnabled: boolean;
+  isPilot: boolean;
+  createdAt: string;
+}
+export interface UserInfo {
+  id: string;
+  fullName: string;
+  email: string;
+  role: { id: number; name: Role };
+  municipality: { id: string; name: string } | null;
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+export interface AuditEntry {
+  id: number;
+  actorId: string | null;
+  actorName: string | null;
+  municipalityId: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  beforeState: string | null;
+  afterState: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+}
+export interface Zone {
+  id: string;
+  municipalityId: string;
+  zoneNumber: string;
+  name: string | null;
+  zoneType: string | null;
+  geometry: unknown;
+  sourceDocument?: string | null;
+  createdAt?: string;
+}
+export interface Block {
+  id: string;
+  zoneId: string;
+  blockNumber: string;
+  geometry: unknown;
+  createdAt: string;
+}
+export interface Parcel {
+  id: string;
+  blockId: string;
+  parcelNumber: string;
+  ownerName?: string | null;
+  zoneType: string | null;
+  areaM2: number | null;
+  geometry: unknown;
+  source?: string;
+  createdAt?: string;
+}
+export interface Road {
+  id: string;
+  municipalityId: string;
+  roadCode: string;
+  name: string | null;
+  roadType: string | null;
+  widthM: number | null;
+  speedLimitKmh: number | null;
+  isSensitive: boolean;
+  geometry: unknown;
+  createdAt: string;
+}
+export interface ZoningRule {
+  id: string;
+  municipalityId: string;
+  zoneId: string | null;
+  zoneType: string | null;
+  ruleKey: string;
+  ruleValue: number;
+  unit: string;
+  sourceDocument: string | null;
+  extractedByAi: boolean;
+  isValidated: boolean;
+  validatedBy: string | null;
+  validatedAt: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
