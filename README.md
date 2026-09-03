@@ -266,6 +266,30 @@ can be lost or redelivered after a crash, so the same event can arrive twice.
 
 ## 6. AI modes
 
+### AI Worker dependency profiles
+
+The AI Worker's Docker image can be built with one of three dependency profiles (selected by the
+`AI_REQUIREMENTS` build arg — see the AI Worker README for exact commands). This is a separate axis
+from `AI_MODE` (mock vs. yolo): the profile controls which *libraries* are installed in the image;
+`AI_MODE` controls which inference path actually runs at *runtime*.
+
+| Profile (`AI_REQUIREMENTS=`) | Adds | Used for |
+|---|---|---|
+| `requirements.txt` (core) | pika, minio, flask only | Smallest/fastest build; mock detection only, no GeoTIFF metadata |
+| `requirements-geospatial.txt` | core + `rasterio`, `shapely`, `pyproj` | **AppHost's default** — mock detection *and* real GeoTIFF metadata extraction |
+| `requirements-yolo.txt` | geospatial + `ultralytics` (pulls PyTorch) | Real YOLO inference once a `.pt` model is supplied |
+
+**AppHost builds the `geospatial` profile by default** (`AppHost.cs`:
+`.WithBuildArg("AI_REQUIREMENTS", "requirements-geospatial.txt")` on the `aiworker` resource), so a
+normal `dotnet run` gets working GeoTIFF metadata extraction out of the box — `AI_MODE` still
+defaults to `mock`, so no model or PyTorch/CUDA is required. To build the smaller core-only image
+instead (e.g. for a faster iteration loop when GeoTIFF isn't needed), change that one line to
+`"requirements.txt"`. To move toward real YOLO later, change it to `"requirements-yolo.txt"` and see
+[§20](#20-real-model-handoff). Verified in this workspace: the core and geospatial images both build
+and run correctly (see the AI Worker README for the exact commands and what was checked); the yolo
+profile builds (~10 GB, ~15 minutes, dominated by PyTorch/CUDA downloads) but has not been exercised
+with a real model.
+
 ### `AI_MODE=mock` (current default)
 
 - Set by `AppHost.cs` as the AI Worker container's default environment (`AI_MODE=mock`).
@@ -292,10 +316,10 @@ can be lost or redelivered after a crash, so the same event can arrive twice.
 
 - Configuration: `AI_MODEL_PATH` (default `/models/model.pt`), `AI_CONFIDENCE_THRESHOLD` (default
   `0.50`), `AI_MODEL_NAME` / `AI_MODEL_VERSION` (labels only, not validated against the model file).
-- Optional dependency: `ultralytics` is installed only from
-  [requirements-yolo.txt](src/AeroCompliance.AiWorker/requirements-yolo.txt), not the default
-  `requirements.txt`. The Worker's Dockerfile must be built with that extra requirements file for YOLO
-  mode to even import successfully.
+- Optional dependency: `ultralytics` is installed only via the `yolo` profile
+  ([requirements-yolo.txt](src/AeroCompliance.AiWorker/requirements-yolo.txt), which itself layers on
+  `requirements-geospatial.txt`). The Worker's Dockerfile must be built with
+  `--build-arg AI_REQUIREMENTS=requirements-yolo.txt` for YOLO mode to even import successfully.
 - Expected input: a georeferenced GeoTIFF (`.tif`/`.tiff`, MIME `image/tiff` or `image/geotiff`) —
   this is the **only** format `FlightImagesController.ValidFile` accepts outside `Development`.
 - Raster CRS + affine transform: **required**. [geospatial.py](src/AeroCompliance.AiWorker/aerocompliance_ai/geospatial.py)
@@ -305,10 +329,10 @@ can be lost or redelivered after a crash, so the same event can arrive twice.
   whole multi-part detection). A raster with no CRS, only an identity transform, or non-finite
   transform/bounds raises a specific `MISSING_GEOREFERENCING`/`INVALID_GEOREFERENCING` code rather
   than being silently accepted.
-- `rasterio`/`shapely` are **optional** dependencies (`requirements-yolo.txt`) — see
-  [the AI Worker README](src/AeroCompliance.AiWorker/README.md) for the `--build-arg
-  AI_REQUIREMENTS=requirements-yolo.txt` needed to build a raster/YOLO-capable image; the default
-  image AppHost builds today stays lightweight (mock-only, no GDAL/rasterio/ultralytics).
+- `rasterio`/`shapely`/`pyproj` come from the `geospatial` profile (which the `yolo` profile also
+  includes) — see [the AI Worker README](src/AeroCompliance.AiWorker/README.md). AppHost already
+  builds the `geospatial` profile by default, so `rasterio` is present; only `ultralytics`/PyTorch
+  (the `yolo` profile on top) is still missing until a teammate deliberately switches to it.
 - Output CRS: `EPSG:4326`, matching the rest of the system (`ImageAnalysisCompleted.OutputCrs` is hardcoded to `"EPSG:4326"` in `main.py` regardless of mode).
 - **Current real behavior**: `YoloModelRunner` lazily imports `ultralytics` and loads `AI_MODEL_PATH`
   only when `analyze()` actually runs; it requires the raster/YOLO-capable build (`rasterio`
@@ -332,21 +356,41 @@ Normal users no longer have to manually type technical capture metadata:
   ([exifPreview.ts](src/AeroCompliance.Frontend/src/lib/exifPreview.ts), via `exifr`) purely for an
   immediate preview — it is never what the system trusts.
 - **GeoTIFF/TIFF** — raster CRS, width, height, and affine transform are read by the **AI Worker**
-  via `rasterio` (see [§6](#6-ai-modes) above and the AI Worker README) and persisted onto the
-  `Image` row (`SourceRasterCrs`/`RasterWidth`/`RasterHeight`/`AffineTransform`) and `OutputCrs` onto
-  `ImageAnalysis` once analysis completes. EXIF location is a JPEG-only concept — GeoTIFF
-  georeferencing is not "EXIF", and the two are tracked with different provenance values.
+  via `rasterio` (present by default — AppHost builds the `geospatial` profile, see above) and
+  persisted onto the `Image` row (`SourceRasterCrs`/`RasterWidth`/`RasterHeight`/`AffineTransform`)
+  and `OutputCrs` onto `ImageAnalysis` once analysis completes. **Verified through the full running
+  system** (real HTTP upload → MinIO → Outbox → RabbitMQ → AI Worker → `ProcessingService` →
+  PostgreSQL): a genuinely georeferenced GeoTIFF's CRS/width/height/affine transform are correctly
+  persisted; a non-georeferenced TIFF completes processing safely with those four fields left `null`
+  rather than failing or inventing values.
+- **EXIF location and GeoTIFF georeferencing are not the same kind of fact, and are never presented
+  as equivalent.** A JPEG's EXIF GPS tag is a single point recorded by the camera/drone at the moment
+  of capture — it locates *the camera*, approximately, and says nothing about individual pixels. A
+  GeoTIFF's CRS + affine transform georeferences *every pixel* of the raster precisely enough to
+  convert a detection mask into map coordinates. This is why `LocationSource` distinguishes
+  `"GeoTiff"` from `"Exif"` rather than treating them as interchangeable, and why only a GeoTIFF (not
+  a JPEG) can carry the `SourceRasterCrs`/`RasterWidth`/`RasterHeight`/`AffineTransform` fields at all.
 - **PNG or images with no geographic metadata** (Development mock mode only) — a supplied
   latitude/longitude is used as given; with none supplied, the location is recorded as `"Missing"`
   rather than defaulting to any municipality's coordinates, and `MetadataRequiresReview` is set so a
-  reviewer knows to confirm/correct it (e.g. via the frontend's map picker).
-- **Precedence** (`FlightImagesController.ResolveMetadata`): GeoTIFF georeferencing (persisted later,
-  asynchronously, by the AI Worker — not resolvable at upload time) > server-extracted EXIF > an
-  explicit user/map-picked value (`ImageUploadForm.OverrideLocation=true` to force this ahead of
-  EXIF) > missing. The same precedence applies to capture time (EXIF `DateTimeOriginal` vs. a
-  supplied `capturedAt`; missing falls back to upload time). Client-supplied values are never allowed
-  to silently override server-extracted ones by default — only an explicit override does that, and it
-  is recorded (`LocationSource="UserProvided"`), not hidden.
+  reviewer knows to confirm/correct it (e.g. via the frontend's map picker). Verified directly against
+  the database: no image row's location is ever silently invented — every row with
+  `location_source = 'Missing'` has `latitude`/`longitude` genuinely `NULL`.
+- **Precedence** (`FlightImagesController.ResolveMetadata` at upload time; `ProcessingService`
+  persisting raster fields once the AI Worker reports them): valid GeoTIFF georeferencing (discovered
+  only *after* upload, asynchronously, by the AI Worker — not resolvable inside the upload request
+  itself) is the authoritative pixel-level source and is stored separately once available; otherwise
+  valid server-extracted EXIF locates the image approximately; otherwise an explicit user/map-picked
+  value (`ImageUploadForm.OverrideLocation=true` to force this ahead of EXIF); otherwise the location
+  stays `"Missing"` and is flagged for review. The same precedence applies to capture time (EXIF
+  `DateTimeOriginal` vs. a supplied `capturedAt`; missing falls back to upload time). Client-supplied
+  values are never allowed to silently override server-extracted ones by default — only an explicit
+  override does that, and it is recorded (`LocationSource="UserProvided"`), not hidden.
+- **A note on pre-Phase-5 data**: images uploaded before the `Phase5ImageMetadataProvenance` migration
+  existed show `LocationSource="Missing"` even if they have a real latitude/longitude — the migration
+  cannot retroactively know *how* an old coordinate was obtained, so it labels old rows with the
+  conservative/unknown value rather than guessing. This is a labeling artifact of the backfill, not
+  evidence of lost or invented data.
 - **Provenance fields** on `Image`: `LocationSource`, `CaptureTimeSource` (`"GeoTiff"` | `"Exif"` |
   `"UserProvided"` | `"Missing"`), and `MetadataRequiresReview` (bool) — added by the
   `Phase5ImageMetadataProvenance` migration. `GET /api/images/{id}` and the upload receipt both
@@ -889,34 +933,39 @@ Checklist for the teammate delivering a trained model, based on the current Work
    (default `/models/model.pt`). The AppHost's `models` reference in the AI Worker project directory
    (`src/AeroCompliance.AiWorker/models`) is a convenient local mount point, but is **not** the only
    valid location — anything reachable at `AI_MODEL_PATH` inside the container works.
-3. **Environment variables to change**: `AI_MODE=yolo`, `AI_MODEL_PATH` (if not the default),
+3. **Switch the dependency profile**: change the `aiworker` resource's build arg in `AppHost.cs` from
+   `.WithBuildArg("AI_REQUIREMENTS", "requirements-geospatial.txt")` to
+   `"requirements-yolo.txt"` — this is the only Dockerfile-level change needed; it pulls in
+   `ultralytics`/PyTorch on top of the geospatial dependencies AppHost already builds by default (see
+   the AI Worker README's "Dependency profiles").
+4. **Environment variables to change**: `AI_MODE=yolo`, `AI_MODEL_PATH` (if not the default),
    `AI_CONFIDENCE_THRESHOLD`, `AI_MODEL_NAME`/`AI_MODEL_VERSION` (for labeling, not validated) — set
    these on the `aiworker` container resource in `AppHost.cs`.
-2. **Optional dependency install**: the Worker's Dockerfile must additionally install
-   `requirements-yolo.txt` (which pulls in `ultralytics`/PyTorch) — the default `requirements.txt`
-   does not include it.
-3. **Why GeoTIFF is required**: only a GeoTIFF carries the raster CRS and affine transform needed to
+5. **Why GeoTIFF is required**: only a GeoTIFF carries the raster CRS and affine transform needed to
    convert YOLO's pixel-space bounding boxes/masks into real map coordinates; PNG/JPEG have no
    georeferencing metadata, which is why they're accepted only as a `Development` mock-mode
    convenience.
-4. **Class IDs/names**: `AnalysisDetection` carries both `ClassId` (int) and `ClassName` (string) —
+6. **Class IDs/names**: `AnalysisDetection` carries both `ClassId` (int) and `ClassName` (string) —
    the real model's output must populate both, and `ProcessingService.Evaluate` currently only reacts
    to `ClassLabel` values of `"building"` or `"violation"` (extend that switch to add more classes).
-5. **Starting YOLO mode**: rebuild the AI Worker image with the YOLO requirements file included, set
-   `AI_MODE=yolo` (and the model path) on the `aiworker` resource in `AppHost.cs`, then
-   `dotnet run --project src/AeroCompliance.AppHost`.
-6. **Checking readiness**: the Worker exposes `GET /ready` (`200` once the model is loaded and RabbitMQ/MinIO
+7. **Starting YOLO mode**: after steps 2–4, `dotnet run --project src/AeroCompliance.AppHost` (the
+   first build of the `yolo` profile is large/slow — ~10 GB, ~15 minutes, dominated by PyTorch/CUDA
+   downloads; this is expected).
+8. **Checking readiness**: the Worker exposes `GET /ready` (`200` once the model is loaded and RabbitMQ/MinIO
    are connected, `503` otherwise) and `GET /health` (liveness) — both visible from the Aspire
    Dashboard's `aiworker` resource.
-7. **Uploading a test GeoTIFF**: same `POST /api/flights/{flightId}/images` endpoint, with a real
+9. **Uploading a test GeoTIFF**: same `POST /api/flights/{flightId}/images` endpoint, with a real
    `.tif`/`.tiff` file whose Content-Type is `image/tiff` or `image/geotiff` — this path works
    in any environment, not just `Development`.
-8. **Verifying detections/violations**: same as §15 steps 12–13 — `GET /api/detections`,
-   `GET /api/violations`.
-9. **Troubleshooting**: "missing model" → check `AI_MODEL_PATH` and the container mount; "missing
-   CRS/invalid geometry" → the raster lacks embedded CRS/affine data, or
-   `geospatial.require_georeferencing` needs an actual implementation wired in (currently a stub);
-   check the Worker's logs in the Aspire Dashboard first.
+10. **Verifying detections/violations**: same as §15 steps 12–13 — `GET /api/detections`,
+    `GET /api/violations`.
+11. **Troubleshooting**: "missing model" → check `AI_MODEL_PATH` and the container mount (and that
+    step 3's build-arg switch actually happened — rebuilding with a stale Docker layer cache can
+    otherwise silently keep the old profile); "missing CRS/invalid geometry" → the raster genuinely
+    lacks embedded CRS/affine data, or is corrupt — `geospatial.extract_raster_metadata` raises a
+    specific `MISSING_GEOREFERENCING`/`INVALID_GEOREFERENCING` code in the image's
+    `last_error_code`/`GET /api/images/{id}/processing-status`; check the Worker's logs in the Aspire
+    Dashboard first.
 
 Swapping in a real model should require **no changes to the .NET frontend or backend contracts** —
 `AnalysisDetection`/`ImageAnalysisCompleted` are already model-agnostic. **Do not commit the real
@@ -1008,11 +1057,15 @@ other projects on the same machine.
   its connection every 3 seconds and logs `worker connection failed: ...`.
 - **AI Worker not ready** — check `GET /ready` on the `aiworker` resource; it stays `503` until it can
   connect to RabbitMQ and MinIO.
-- **Missing model in YOLO mode** — `YoloModelRunner.__init__` raises if `ultralytics` isn't installed
-  (rebuild the image with `requirements-yolo.txt`), and analysis always raises today regardless (§7) —
-  YOLO mode is not expected to succeed yet.
-- **Missing GeoTIFF CRS/affine transform** — expected: `geospatial.require_georeferencing` raises by
-  design; this code path is a stub, not a bug to work around.
+- **Missing model in YOLO mode** — `YoloModelRunner._load` raises a clear error if `ultralytics` isn't
+  installed (rebuild with `--build-arg AI_REQUIREMENTS=requirements-yolo.txt`, §6) or if
+  `AI_MODEL_PATH` doesn't point to an existing file — YOLO mode has not been run against a real model
+  in this workspace (§6, §20), so treat any real inference issue as needing hands-on debugging, not
+  as an already-known gap.
+- **Missing/invalid GeoTIFF CRS or affine transform** — expected behavior, not a bug:
+  `geospatial.extract_raster_metadata` raises `MISSING_GEOREFERENCING`/`INVALID_GEOREFERENCING`
+  rather than guessing; in mock mode this is logged and simply leaves the image's raster fields
+  `null` (still `Completed`), in `AI_MODE=yolo` it fails the image (`AnalysisFailed`, retryable).
 - **Image stuck in `Queued`/`Analyzing`** — check that `apiservice`'s `ProcessingOutboxDispatcher` is
   running (it's a hosted service inside ApiService, not a separate resource) and that `aiworker` is
   connected and consuming; check both services' logs in the dashboard.
@@ -1072,9 +1125,10 @@ production use:
 
 **Required before production**
 - A real, verified `.pt` model and a representative georeferenced GeoTIFF to actually run
-  `YoloModelRunner` end to end (§6, §20) — the raster-to-`EPSG:4326` conversion path itself was
-  manually verified against real rasterio/shapely and a synthetic georeferenced raster, but
-  `YoloModelRunner` has never been exercised with a real model or a real drone GeoTIFF.
+  `YoloModelRunner` end to end (§6, §20). The raster-to-`EPSG:4326` conversion path itself was built,
+  and verified inside the actual raster/YOLO-capable Docker image against a synthetic georeferenced
+  GeoTIFF (see the AI Worker README) — but `YoloModelRunner`'s own inference call has never run
+  against a real model or a real drone GeoTIFF.
 - A zoning-rule engine that the compliance evaluator actually consults (`RuleId` is currently always
   `null`).
 - Official municipality GIS import (current data is CRUD-entered demo data).

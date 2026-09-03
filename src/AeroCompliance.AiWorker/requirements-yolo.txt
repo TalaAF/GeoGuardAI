@@ -1,5 +1,2 @@
--r requirements.txt
+-r requirements-geospatial.txt
 ultralytics>=8.3,<9
-rasterio>=1.4,<2
-pyproj>=3.7,<4
-shapely>=2.1,<3

@@ -71,6 +71,13 @@ builder.AddProject<Projects.AeroCompliance_ProcessingService>("processingservice
 
 builder.AddContainer("aiworker", "aerocompliance-ai-worker")
     .WithDockerfile("../AeroCompliance.AiWorker")
+    // "geospatial" profile (rasterio/shapely/pyproj, no ultralytics/PyTorch) so a normal local run
+    // can read GeoTIFF georeferencing without pulling in the much larger YOLO/PyTorch stack. This is
+    // independent of AI_MODE below, which is what actually selects mock vs. real inference — switch
+    // this build arg to "requirements.txt" for a smaller/faster core-only image (no GeoTIFF metadata
+    // extraction), or "requirements-yolo.txt" once a real model is being tested (see the AI Worker
+    // README's "Dependency profiles" section).
+    .WithBuildArg("AI_REQUIREMENTS", "requirements-geospatial.txt")
     .WithReference(rabbitmq)
     .WithEnvironment("AI_MODE", "mock")
     .WithEnvironment("AI_MODEL_PATH", "/models/model.pt")
