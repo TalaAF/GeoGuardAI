@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, errorMessage } from "../api/client";
 import type { FlightDetails } from "../api/types";
 import { Notice } from "./Common";
+import GeometryEditor from "./GeometryEditor";
+import type { NormalizedMultiPolygon } from "../lib/geometry";
 
 export default function FlightEdit({
   flight,
@@ -17,7 +19,7 @@ export default function FlightEdit({
     scheduledAt: "",
     weatherConditions: "",
     qualityFlag: true,
-    plannedArea: "",
+    plannedArea: null as NormalizedMultiPolygon | null,
   });
   useEffect(
     () =>
@@ -28,9 +30,7 @@ export default function FlightEdit({
           : "",
         weatherConditions: flight.weatherConditions || "",
         qualityFlag: flight.qualityFlag,
-        plannedArea: flight.plannedArea
-          ? JSON.stringify(flight.plannedArea, null, 2)
-          : "",
+        plannedArea: null,
       }),
     [flight],
   );
@@ -47,18 +47,12 @@ export default function FlightEdit({
           : null,
         weatherConditions: form.weatherConditions || null,
         qualityFlag: form.qualityFlag,
-        plannedArea: form.plannedArea.trim()
-          ? JSON.parse(form.plannedArea)
-          : null,
+        plannedArea: form.plannedArea,
       });
       setOpen(false);
       await onSaved();
     } catch (e) {
-      setError(
-        e instanceof SyntaxError
-          ? "Planned area must be valid GeoJSON."
-          : errorMessage(e),
-      );
+      setError(errorMessage(e));
     }
   };
   return (
@@ -106,12 +100,11 @@ export default function FlightEdit({
             />
           </label>
           <label>
-            Planned area GeoJSON
-            <textarea
-              value={form.plannedArea}
-              onChange={(e) =>
-                setForm({ ...form, plannedArea: e.target.value })
-              }
+            Planned area (optional)
+            <GeometryEditor
+              initialGeometry={flight.plannedArea}
+              onChange={(g) => setForm((f) => ({ ...f, plannedArea: g }))}
+              boundaryLabel="planned area"
             />
           </label>
           <label>

@@ -35,6 +35,7 @@ export interface ViolationSummary {
   status: string;
   aiConfidenceScore: number;
   flightId: string | null;
+  flightMissionName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -53,11 +54,18 @@ export interface ViolationDetails extends ViolationSummary {
   detectionId: string;
   detectionClass: string;
   detectionConfidence: number;
+  flightMissionName?: string | null;
+  sourceImageFileName?: string | null;
   parcelId: string | null;
+  parcelNumber?: string | null;
   roadId: string | null;
+  roadCode?: string | null;
   zoneId: string | null;
+  zoneNumber?: string | null;
   blockId: string | null;
+  blockNumber?: string | null;
   ruleId: string | null;
+  ruleKey?: string | null;
   evidenceImageId: string | null;
   evidenceStoragePath: string | null;
   statusHistory: ViolationHistory[];
@@ -167,6 +175,9 @@ export interface Detection {
   heightM?: number | null;
   modelName?: string | null;
   modelVersion?: string | null;
+  flightId?: string | null;
+  sourceImageFileName?: string | null;
+  flightMissionName?: string | null;
   createdAt: string;
 }
 export interface Municipality {
@@ -214,6 +225,7 @@ export interface Zone {
 export interface Block {
   id: string;
   zoneId: string;
+  zoneNumber?: string | null;
   blockNumber: string;
   geometry: unknown;
   createdAt: string;
@@ -221,6 +233,8 @@ export interface Block {
 export interface Parcel {
   id: string;
   blockId: string;
+  blockNumber?: string | null;
+  zoneNumber?: string | null;
   parcelNumber: string;
   ownerName?: string | null;
   zoneType: string | null;
@@ -245,6 +259,7 @@ export interface ZoningRule {
   id: string;
   municipalityId: string;
   zoneId: string | null;
+  zoneNumber?: string | null;
   zoneType: string | null;
   ruleKey: string;
   ruleValue: number;
@@ -253,6 +268,7 @@ export interface ZoningRule {
   extractedByAi: boolean;
   isValidated: boolean;
   validatedBy: string | null;
+  validatorName?: string | null;
   validatedAt: string | null;
   isActive: boolean;
   createdAt: string;

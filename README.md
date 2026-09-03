@@ -42,6 +42,9 @@ Inspector) can move it to `confirmed_under_notification` or `dismissed`.
 - Multi-file upload UX with per-file state/progress, client-side EXIF preview, controlled-concurrency
   uploads, per-file retry, and a Leaflet map (image locations, AI detections, and — on the violation
   detail page — the reviewed detection styled by status) (Phase 5).
+- A reusable draw/import/advanced `GeometryEditor` (Leaflet + geoman) for Zone/Block/Parcel/Road and
+  flight-planned-area forms, replacing raw GeoJSON text as the primary input — see "Drawing and
+  editing boundaries in the frontend" in [§7](#7-crs-and-gis-rules).
 - Unit tests (16 test methods) and integration tests (13 test methods) — 29 `[Fact]`/`[Theory]` methods total.
 
 ### Implemented in mock/development mode
@@ -204,7 +207,9 @@ Node build → nginx) and runs it as the `frontend` container resource, proxying
 - **`MetadataExtractor`** (.NET, pure-managed) — server-side JPEG EXIF/GPS extraction (Phase 5,
   `AeroCompliance.ApiService`)
 - **React 19 + Vite 7 + TypeScript**, `react-router-dom`, `axios`, `lucide-react`, `leaflet` (maps),
-  `exifr` (client-side EXIF preview only, Phase 5) (frontend)
+  `@geoman-io/leaflet-geoman-free` (draw/edit boundaries), `@turf/*` (`kinks`, `area`,
+  `boolean-within`, `helpers` — geometry validation/normalization), `exifr` (client-side EXIF preview
+  only, Phase 5) (frontend)
 - **OpenTelemetry** via Aspire `ServiceDefaults` (traces/metrics/health checks)
 - **Swagger / OpenAPI** (ApiService, Development only) with a Bearer auth scheme wired in
 - **Docker** — required for Postgres, RabbitMQ, MinIO, the AI Worker container, and the frontend
@@ -435,6 +440,82 @@ Normal users no longer have to manually type technical capture metadata:
 4. **What is still simplified / not implemented**: no zoning-rule evaluation (`RuleId` is always
    `null`), no setback/height/coverage-ratio checks against `zoning_rules.rule_value`, no orthomosaic
    detections, and no multi-detection aggregation per image.
+
+### Drawing and editing boundaries in the frontend
+
+Zones, blocks, parcels, roads, and a flight's planned area all use the same reusable
+[GeometryEditor](src/AeroCompliance.Frontend/src/components/GeometryEditor.tsx) component. **There is
+no raw-GeoJSON text box anywhere in the municipal frontend** — it was removed entirely (an earlier
+"Advanced GeoJSON" mode existed briefly and has since been deleted), because normal municipal users
+should never need to read or write GeoJSON by hand. GeoJSON remains the format used internally
+between the frontend and the API; a developer or GIS specialist who needs to inspect it uses
+**Swagger or the browser's developer tools**, never a screen built for end users. (Zoning Rules don't
+own geometry, so they're unaffected; Detections/Violations show geometry read-only on a map and are
+never edited through this component.)
+
+- **Two input methods**: **Draw on map** (default — click points to draw a polygon, click the first
+  point again to finish; built on [`@geoman-io/leaflet-geoman-free`](https://github.com/geoman-io/leaflet-geoman)
+  on top of the existing plain-Leaflet setup, not react-leaflet) and **Import boundary file** (a
+  `.geojson`/`.json` file — accepts a raw `Polygon`/`MultiPolygon`, a `Feature`, or a
+  `FeatureCollection`; read and validated entirely in the browser, never uploaded to object storage;
+  the result — "1 boundary imported" / "N boundary parts imported" / a plain-language error — is shown
+  visually on the map, never as file content, and still requires clicking "Use this geometry" and then
+  the form's own Save button). Both funnel through the same normalizer
+  ([`src/lib/geometry.ts`](src/AeroCompliance.Frontend/src/lib/geometry.ts)), so the request body sent
+  to the API is identical regardless of which method was used.
+- **Map default**: with no existing or parent geometry to zoom to, the map centers on Ramallah
+  (`31.9038, 35.2034`) at a city-level zoom — this is only a starting viewport. The editor always
+  displays: "Drawn boundaries represent municipality-supplied data and should be verified before
+  operational use" — never a claim that a user-drawn boundary is official Ramallah cadastral data.
+- **Coordinate handling**: the component only ever reads/writes shapes through Leaflet's own
+  `L.geoJSON()` / `layer.toGeoJSON()`, which do the `[lat,lon]` (Leaflet) vs. `[lon,lat]` (GeoJSON)
+  conversion internally — nobody using the form ever sees or handles that distinction.
+- **Normalization**: a `Polygon` is normalized to a single-part `MultiPolygon` (matching what every
+  GIS entity's column type requires); holes and every valid part of a `MultiPolygon` are preserved;
+  rings are closed automatically. A self-intersecting, empty, non-finite, out-of-range, or otherwise
+  malformed polygon is **rejected with a plain-language message**, never silently repaired into
+  something the user didn't actually draw — this is deliberately different from the AI Worker's
+  detection-mask handling (§6), because that geometry is machine-generated and this is user-authored.
+- **Parent-boundary reference**: editing a Block shows its selected Zone as a read-only dashed
+  reference layer, labeled by the Zone's **number**, never its UUID (and fits the map to it); a Parcel
+  shows its selected Block the same way, by block number. A small legend distinguishes the reference
+  boundary from the one actually being edited. The same reference/legend pattern is reused on the read
+  -only GIS record-detail map (§ "GIS list and detail screens" below).
+- **Parent-boundary containment is frontend-only.** The editor warns ("The block boundary must remain
+  inside the selected zone.") and blocks submission when a Block's boundary extends outside its Zone
+  (or a Parcel outside its Block), computed client-side with `@turf/boolean-within`. **The backend
+  does not enforce this** — `BlocksController`/`ParcelsController` only check that the parent record
+  exists and belongs to the visible tenant, not that the geometry is actually contained (confirmed
+  directly: a Block record geometrically far outside its Zone was accepted by the API with
+  `201 Created` when tested without going through the frontend). Treat the in-browser check as a
+  usability guardrail, not a data-integrity guarantee — a script or a future API client can still
+  create non-contained geometry today.
+- **Road geometry** is explicitly labeled as the road's *coverage/boundary area*, not a centerline —
+  the `roads.geom` column is `geometry(MultiPolygon, 4326)`, so this matches what the schema actually
+  stores.
+
+### GIS list and detail screens
+
+Zone/Block/Parcel/Road/Zoning-rule lists show meaningful columns (e.g. Blocks: block number, **Zone**
+by number, approximate area, state) instead of raw UUIDs, and the "Selected record details" panel —
+previously a `JSON.stringify` dump of the whole record — is a per-type, human-readable card (numbers,
+names, dates, a plain-language state) plus the boundary on a map, never JSON. `BlockDto`,
+`ParcelSummaryDto`/`ParcelDetailsDto`, `ZoningRuleDto`, `ViolationSummaryDto`/`ViolationDetailsDto`,
+and `DetectionSummaryDto`/`DetectionDetailsDto` were all extended with small, additive
+name/reference fields (e.g. `zoneNumber`, `blockNumber`, `flightMissionName`, `sourceImageFileName`,
+`validatorName`) so the frontend never has to fall back to showing an id — no schema/entity/migration
+change was needed, only read-side DTO projections.
+
+The **Audit Trail** page never renders `audit_logs.before_state`/`after_state` as JSON either: a
+client-side differ ([`src/lib/audit.ts`](src/AeroCompliance.Frontend/src/lib/audit.ts)) turns the two
+JSON snapshots into a "Field: old → new" list (e.g. "Status: under review → confirmed under
+notification"), derives a human reference for the row from the snapshot itself (a zone/road/rule/
+user's own number, code, or name — never a raw id), and drops any field whose name looks like an id
+or a credential/secret/token/hash. If a snapshot can't be safely read as a flat object, the row falls
+back to showing only the action, entity type, actor, and timestamp — never the raw text. The **AI
+Detections** and **Violation** detail pages similarly never show detection/analysis UUIDs or a raw
+geometry payload — only a short support reference (e.g. "Detection ADDE8257"), human field values,
+and the geometry rendered on a map.
 
 ## 8. Database model
 

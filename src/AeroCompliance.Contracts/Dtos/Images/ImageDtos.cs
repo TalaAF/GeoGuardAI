@@ -40,7 +40,9 @@ public sealed record ImageProcessingStatusDto(Guid ImageId, string Status, Guid?
     string? ErrorCode, string? ErrorMessage);
 
 public sealed record DetectionSummaryDto(Guid Id, Guid ImageId, Guid? ImageAnalysisId, int? ClassId,
-    string ClassName, decimal Confidence, JsonElement Geometry, DateTimeOffset CreatedAt);
+    string ClassName, decimal Confidence, JsonElement Geometry, DateTimeOffset CreatedAt,
+    Guid? FlightId, string? SourceImageFileName, string? FlightMissionName);
 public sealed record DetectionDetailsDto(Guid Id, Guid ImageId, Guid? ImageAnalysisId, Guid? ExternalDetectionId,
     int? ClassId, string ClassName, decimal Confidence, JsonElement Geometry, decimal? AreaM2,
-    decimal? PerimeterM, decimal? HeightM, string ModelName, string ModelVersion, DateTimeOffset CreatedAt);
+    decimal? PerimeterM, decimal? HeightM, string ModelName, string ModelVersion, DateTimeOffset CreatedAt,
+    Guid? FlightId, string? SourceImageFileName, string? FlightMissionName);

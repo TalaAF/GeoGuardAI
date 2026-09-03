@@ -16,12 +16,12 @@ import {
   Empty,
   Notice,
   PageTitle,
-  ShortId,
   Spinner,
   Status,
   fmtDate,
   fmtPercent,
 } from "../components/Common";
+import { humanizeCode, shortRef } from "../lib/labels";
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardSummary | null>(null);
@@ -92,7 +92,7 @@ export default function Dashboard() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>Reference</th>
+                        <th>Flight</th>
                         <th>Type</th>
                         <th>Confidence</th>
                         <th>Status</th>
@@ -104,10 +104,10 @@ export default function Dashboard() {
                         <tr key={v.id}>
                           <td>
                             <Link to={`/violations/${v.id}`}>
-                              <ShortId value={v.id} />
+                              {v.flightMissionName || `Case ${shortRef(v.id)}`}
                             </Link>
                           </td>
-                          <td>{v.violationType.replaceAll("_", " ")}</td>
+                          <td>{humanizeCode(v.violationType)}</td>
                           <td className="confidence">
                             {fmtPercent(v.aiConfidenceScore)}
                           </td>

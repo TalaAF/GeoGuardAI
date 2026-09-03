@@ -23,6 +23,7 @@ public sealed class DashboardController(AeroComplianceDbContext db, ICurrentUser
         var recent = await violations.AsNoTracking().OrderByDescending(x => x.CreatedAt).Take(10)
             .Select(x => new ViolationSummaryDto(x.Id, x.ViolationType, x.CurrentStatus.Code, x.AiConfidenceScore,
                 x.Detection.Image != null ? x.Detection.Image.FlightId : x.Detection.Orthomosaic != null ? x.Detection.Orthomosaic.FlightId : null,
+                x.Detection.Image != null ? x.Detection.Image.Flight.MissionName : x.Detection.Orthomosaic != null ? x.Detection.Orthomosaic.Flight.MissionName : null,
                 x.CreatedAt, x.UpdatedAt)).ToListAsync(ct);
         int Count(string code) => grouped.FirstOrDefault(x => x.Status == code)?.Count ?? 0;
         return Ok(new DashboardSummaryDto(await flights.CountAsync(ct), await db.Images.CountAsync(x => flightIds.Contains(x.FlightId), ct),

@@ -9,12 +9,12 @@ import {
   Notice,
   PageTitle,
   Pager,
-  ShortId,
   Spinner,
   Status,
   fmtDate,
   fmtPercent,
 } from "../components/Common";
+import { humanizeCode, shortRef } from "../lib/labels";
 
 export default function Violations() {
   const [data, setData] = useState<Paged<ViolationSummary> | null>(null);
@@ -113,13 +113,9 @@ export default function Violations() {
                 <tbody>
                   {data.items.map((v) => (
                     <tr key={v.id}>
-                      <td>
-                        <ShortId value={v.id} />
-                      </td>
-                      <td>{v.violationType.replaceAll("_", " ")}</td>
-                      <td>
-                        <ShortId value={v.flightId} />
-                      </td>
+                      <td>Case {shortRef(v.id)}</td>
+                      <td>{humanizeCode(v.violationType)}</td>
+                      <td>{v.flightMissionName || "Untitled flight"}</td>
                       <td className="confidence">
                         {fmtPercent(v.aiConfidenceScore)}
                       </td>

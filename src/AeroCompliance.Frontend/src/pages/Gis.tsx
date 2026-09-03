@@ -1,5 +1,5 @@
 import { CheckCircle2, Edit3, Plus, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, errorMessage, page as getPage } from "../api/client";
 import type {
   Block,
@@ -15,13 +15,38 @@ import {
   Empty,
   Notice,
   PageTitle,
-  ShortId,
   Spinner,
+  fmtDate,
 } from "../components/Common";
+import GeometryEditor from "../components/GeometryEditor";
+import GeoMap from "../components/GeoMap";
+import { formatArea, totalAreaM2, type NormalizedMultiPolygon } from "../lib/geometry";
 
 type Tab = "zones" | "blocks" | "parcels" | "roads" | "zoning-rules";
 type Row = Zone | Block | Parcel | Road | ZoningRule;
-const blankGeometry = '{"type":"MultiPolygon","coordinates":[]}';
+const GEOMETRY_TABS: Tab[] = ["zones", "blocks", "parcels", "roads"];
+const BOUNDARY_LABEL: Record<Tab, string> = {
+  zones: "zone boundary",
+  blocks: "block boundary",
+  parcels: "parcel boundary",
+  roads: "road coverage area",
+  "zoning-rules": "boundary",
+};
+function title(row: Row): string {
+  const r = row as unknown as Record<string, unknown>;
+  return String(
+    r.zoneNumber || r.blockNumber || r.parcelNumber || r.roadCode || r.ruleKey || r.id,
+  );
+}
+function safeAreaM2(geometry: unknown): number | null {
+  try {
+    const g = geometry as { type?: string; coordinates?: unknown } | null;
+    if (!g || g.type !== "MultiPolygon" || !Array.isArray(g.coordinates)) return null;
+    return totalAreaM2(g as NormalizedMultiPolygon);
+  } catch {
+    return null;
+  }
+}
 const initial = {
   municipalityId: "",
   zoneId: "",
@@ -45,7 +70,7 @@ const initial = {
   sourceDocument: "",
   extractedByAi: false,
   isActive: true,
-  geometry: blankGeometry,
+  geometry: null as NormalizedMultiPolygon | null,
 };
 export default function Gis() {
   const { user } = useAuth();
@@ -60,6 +85,7 @@ export default function Gis() {
     municipalityId: user?.municipality?.id || "",
   });
   const [editing, setEditing] = useState<string | null>(null);
+  const [initialGeometry, setInitialGeometry] = useState<unknown>(null);
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -94,11 +120,16 @@ export default function Gis() {
   }, [load]);
   const reset = () => {
     setEditing(null);
+    setInitialGeometry(null);
     setForm({ ...initial, municipalityId: user?.municipality?.id || "" });
   };
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    if (GEOMETRY_TABS.includes(tab) && !form.geometry) {
+      setError("Draw, import, or paste a valid boundary before saving.");
+      return;
+    }
     try {
       let body: Record<string, unknown>;
       if (tab === "zones")
@@ -107,14 +138,14 @@ export default function Gis() {
           zoneNumber: form.zoneNumber,
           name: form.name || null,
           zoneType: form.zoneType || null,
-          geometry: JSON.parse(form.geometry),
+          geometry: form.geometry,
           sourceDocument: form.sourceDocument || null,
         };
       else if (tab === "blocks")
         body = {
           zoneId: form.zoneId,
           blockNumber: form.blockNumber,
-          geometry: JSON.parse(form.geometry),
+          geometry: form.geometry,
         };
       else if (tab === "parcels")
         body = {
@@ -123,7 +154,7 @@ export default function Gis() {
           ownerName: form.ownerName || null,
           zoneType: form.zoneType || null,
           areaM2: form.areaM2 ? Number(form.areaM2) : null,
-          geometry: JSON.parse(form.geometry),
+          geometry: form.geometry,
           source: form.source,
         };
       else if (tab === "roads")
@@ -135,7 +166,7 @@ export default function Gis() {
           widthM: form.widthM ? Number(form.widthM) : null,
           speedLimitKmh: form.speedLimitKmh ? Number(form.speedLimitKmh) : null,
           isSensitive: form.isSensitive,
-          geometry: JSON.parse(form.geometry),
+          geometry: form.geometry,
         };
       else
         body = {
@@ -156,11 +187,7 @@ export default function Gis() {
       reset();
       await load();
     } catch (e) {
-      setError(
-        e instanceof SyntaxError
-          ? "Geometry must be valid GeoJSON using longitude then latitude."
-          : errorMessage(e),
-      );
+      setError(errorMessage(e));
     }
   };
   const edit = async (row: Row) => {
@@ -196,10 +223,9 @@ export default function Gis() {
       sourceDocument: String(r.sourceDocument || ""),
       extractedByAi: Boolean(r.extractedByAi),
       isActive: r.isActive === undefined ? true : Boolean(r.isActive),
-      geometry: r.geometry
-        ? JSON.stringify(r.geometry, null, 2)
-        : blankGeometry,
+      geometry: null,
     });
+    setInitialGeometry(r.geometry ?? null);
     setShow(true);
   };
   const view = async (row: Row) => {
@@ -218,22 +244,23 @@ export default function Gis() {
       setError(errorMessage(e));
     }
   };
-  const title = (row: Row) => {
-    const r = row as unknown as Record<string, unknown>;
-    return String(
-      r.zoneNumber ||
-        r.blockNumber ||
-        r.parcelNumber ||
-        r.roadCode ||
-        r.ruleKey ||
-        r.id,
-    );
-  };
+  const parentBoundary =
+    tab === "blocks" && form.zoneId
+      ? (() => {
+          const zone = zones.find((z) => z.id === form.zoneId);
+          return zone ? { geometry: zone.geometry, label: `Zone ${zone.zoneNumber}` } : null;
+        })()
+      : tab === "parcels" && form.blockId
+        ? (() => {
+            const block = blocks.find((b) => b.id === form.blockId);
+            return block ? { geometry: block.geometry, label: `Block ${block.blockNumber}` } : null;
+          })()
+        : null;
   return (
     <div className="page">
       <PageTitle
         title="GIS Records"
-        description="Authoritative GeoJSON records. Coordinates remain longitude then latitude; CRS is never changed by the client."
+        description="Zones, blocks, parcels, roads, and zoning rules for your municipality. Draw boundaries on the map or import a boundary file — the underlying map data is generated automatically."
         actions={
           <button className="secondary" onClick={() => void load()}>
             <RefreshCw size={14} />
@@ -547,20 +574,28 @@ export default function Gis() {
                 </>
               )}
             </div>
-            {tab !== "zoning-rules" && (
+            {GEOMETRY_TABS.includes(tab) && (
               <label>
-                Geometry GeoJSON
-                <textarea
-                  required
-                  value={form.geometry}
-                  onChange={(e) =>
-                    setForm({ ...form, geometry: e.target.value })
-                  }
+                {tab === "roads" ? "Road coverage area" : "Boundary"}
+                <GeometryEditor
+                  key={`${tab}-${editing ?? "new"}`}
+                  initialGeometry={initialGeometry}
+                  onChange={(g) => setForm((f) => ({ ...f, geometry: g }))}
+                  boundaryLabel={BOUNDARY_LABEL[tab]}
+                  parentBoundary={parentBoundary}
                 />
+                {tab === "roads" && (
+                  <p style={{ fontSize: 11, color: "#94a3b8", margin: "4px 0 0" }}>
+                    This is the road's coverage/boundary area, not a centerline.
+                  </p>
+                )}
               </label>
             )}
             <div className="actions">
-              <button className="primary">
+              <button
+                className="primary"
+                disabled={GEOMETRY_TABS.includes(tab) && !form.geometry}
+              >
                 {editing ? "Save changes" : "Create"}
               </button>
             </div>
@@ -578,39 +613,16 @@ export default function Gis() {
             <div className="table-wrap">
               <table className="data-table">
                 <thead>
-                  <tr>
-                    <th>Record</th>
-                    <th>Reference</th>
-                    <th>Parent / type</th>
-                    <th>State</th>
-                    <th />
-                  </tr>
+                  <tr>{columnHeaders(tab).map((h) => <th key={h}>{h}</th>)}<th /></tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => {
                     const r = row as unknown as Record<string, unknown>;
                     return (
                       <tr key={String(r.id)}>
-                        <td>{title(row)}</td>
-                        <td>
-                          <ShortId value={String(r.id)} />
-                        </td>
-                        <td>
-                          {String(
-                            r.zoneType ||
-                              r.zoneId ||
-                              r.blockId ||
-                              r.roadType ||
-                              "—",
-                          )}
-                        </td>
-                        <td>
-                          {r.isValidated === undefined
-                            ? "Available"
-                            : r.isValidated
-                              ? "Validated"
-                              : "Pending validation"}
-                        </td>
+                        {columnCells(tab, row).map((cell, i) => (
+                          <td key={i}>{cell == null ? "—" : String(cell)}</td>
+                        ))}
                         <td>
                           <div className="actions">
                             <button
@@ -655,11 +667,139 @@ export default function Gis() {
         </div>
         {selected && (
           <div style={{ marginTop: 16 }}>
-            <h2>Selected record details</h2>
-            <pre className="code">{JSON.stringify(selected, null, 2)}</pre>
+            <h2>{title(selected)}</h2>
+            <RecordDetail tab={tab} row={selected} zones={zones} blocks={blocks} onClose={() => setSelected(null)} />
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+function columnHeaders(tab: Tab): string[] {
+  switch (tab) {
+    case "zones": return ["Zone number", "Name", "Type", "State"];
+    case "blocks": return ["Block number", "Zone", "Area", "State"];
+    case "parcels": return ["Parcel number", "Block", "Zone type", "Area", "State"];
+    case "roads": return ["Road code", "Name", "Type", "Width", "Sensitive"];
+    default: return ["Rule", "Target", "Value", "State"];
+  }
+}
+function columnCells(tab: Tab, row: Row) {
+  const r = row as unknown as Record<string, unknown>;
+  const state = r.isValidated === undefined ? "Available" : r.isValidated ? "Validated" : "Pending validation";
+  switch (tab) {
+    case "zones":
+      return [r.zoneNumber, r.name || "—", r.zoneType || "—", state];
+    case "blocks": {
+      const area = safeAreaM2(r.geometry);
+      return [r.blockNumber, r.zoneNumber ? `Zone ${r.zoneNumber}` : "—", area != null ? formatArea(area) : "—", state];
+    }
+    case "parcels": {
+      const area = typeof r.areaM2 === "number" ? r.areaM2 : safeAreaM2(r.geometry);
+      return [r.parcelNumber, r.blockNumber ? `Block ${r.blockNumber}` : "—", r.zoneType || "—", area != null ? formatArea(area) : "—", state];
+    }
+    case "roads":
+      return [r.roadCode, r.name || "—", r.roadType || "—", r.widthM != null ? `${r.widthM} m` : "—", r.isSensitive ? "Yes" : "No"];
+    default:
+      return [r.ruleKey, r.zoneType ? `Zone type: ${r.zoneType}` : "Zone-specific", `${r.ruleValue} ${r.unit}`, state];
+  }
+}
+
+/** Per-type, human-readable record detail — never a raw JSON dump. Shows the boundary on a map with
+ * its parent (Zone/Block) as a reference layer when one is known. */
+function RecordDetail({
+  tab,
+  row,
+  zones,
+  blocks,
+  onClose,
+}: {
+  tab: Tab;
+  row: Row;
+  zones: Zone[];
+  blocks: Block[];
+  onClose: () => void;
+}) {
+  const r = row as unknown as Record<string, unknown>;
+  const geometry = r.geometry ?? null;
+  const parentBoundary =
+    tab === "blocks" && r.zoneId
+      ? (() => {
+          const zone = zones.find((z) => z.id === r.zoneId);
+          return zone ? { geometry: zone.geometry, label: `Zone ${zone.zoneNumber}` } : null;
+        })()
+      : tab === "parcels" && r.blockId
+        ? (() => {
+            const block = blocks.find((b) => b.id === r.blockId);
+            return block ? { geometry: block.geometry, label: `Block ${block.blockNumber}` } : null;
+          })()
+        : null;
+  const rows: [string, ReactNode][] =
+    tab === "zones"
+      ? [
+          ["Zone number", String(r.zoneNumber)],
+          ["Name", String(r.name || "—")],
+          ["Zone type", String(r.zoneType || "—")],
+          ["Source document", String(r.sourceDocument || "—")],
+          ["Approximate area", geometry ? formatArea(safeAreaM2(geometry) ?? 0) : "—"],
+          ["Created", fmtDate(r.createdAt as string)],
+        ]
+      : tab === "blocks"
+        ? [
+            ["Block number", String(r.blockNumber)],
+            ["Zone", r.zoneNumber ? `Zone ${r.zoneNumber}` : "—"],
+            ["Approximate area", geometry ? formatArea(safeAreaM2(geometry) ?? 0) : "—"],
+            ["Created", fmtDate(r.createdAt as string)],
+          ]
+        : tab === "parcels"
+          ? [
+              ["Parcel number", String(r.parcelNumber)],
+              ["Block", r.blockNumber ? `Block ${r.blockNumber}` : "—"],
+              ["Zone", r.zoneNumber ? `Zone ${r.zoneNumber}` : "—"],
+              ["Zone type", String(r.zoneType || "—")],
+              ["Area", r.areaM2 != null ? formatArea(Number(r.areaM2)) : geometry ? formatArea(safeAreaM2(geometry) ?? 0) : "—"],
+              ["Source", String(r.source || "—")],
+              ["Owner", r.ownerName ? String(r.ownerName) : "Restricted to authorized roles"],
+            ]
+          : tab === "roads"
+            ? [
+                ["Road code", String(r.roadCode)],
+                ["Name", String(r.name || "—")],
+                ["Type", String(r.roadType || "—")],
+                ["Width", r.widthM != null ? `${r.widthM} m` : "—"],
+                ["Speed limit", r.speedLimitKmh != null ? `${r.speedLimitKmh} km/h` : "—"],
+                ["Sensitive", r.isSensitive ? "Yes" : "No"],
+              ]
+            : [
+                ["Rule", String(r.ruleKey)],
+                ["Required value", `${r.ruleValue} ${r.unit}`],
+                ["Target", r.zoneNumber ? `Zone ${r.zoneNumber}` : r.zoneType ? `Zone type: ${r.zoneType}` : "—"],
+                ["Active", r.isActive ? "Yes" : "No"],
+                ["AI-extracted", r.extractedByAi ? "Yes" : "No"],
+                ["Human-validated", r.isValidated ? "Yes" : "No"],
+                ["Validated by", r.validatorName ? String(r.validatorName) : "—"],
+              ];
+  return (
+    <div className="grid two-col">
+      <div className="detail-grid">
+        {rows.map(([label, value]) => (
+          <div className="detail" key={label}>
+            <small>{label}</small>
+            <strong>{value}</strong>
+          </div>
+        ))}
+        <div className="actions" style={{ marginTop: 10 }}>
+          <button className="secondary" onClick={onClose}>Close</button>
+        </div>
+      </div>
+      {tab !== "zoning-rules" && geometry != null && (
+        <GeoMap
+          features={[{ id: String(r.id), geometry, kind: "parcel", label: title(row) }]}
+          parentFeature={parentBoundary}
+          legend
+        />
+      )}
     </div>
   );
 }

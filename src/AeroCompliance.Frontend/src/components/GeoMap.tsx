@@ -49,10 +49,12 @@ const LEGEND: Array<[FeatureKind, string]> = [
   ["road", "Road"],
   ["parcel", "Parcel"],
 ];
+const PARENT_STYLE: L.PathOptions = { color: "#64748b", weight: 2, dashArray: "6 4", fillOpacity: 0.03 };
 
 export default function GeoMap({
   points = [],
   features = [],
+  parentFeature = null,
   onPick,
   pickedPoint,
   height = 280,
@@ -61,6 +63,9 @@ export default function GeoMap({
 }: {
   points?: MapPoint[];
   features?: MapFeature[];
+  /** An optional read-only reference boundary (e.g. a Block's parent Zone), styled distinctly from
+   * every editable/reviewed feature and never included as something the viewer can edit here. */
+  parentFeature?: { geometry: unknown; label: string } | null;
   onPick?: (lat: number, lon: number) => void;
   pickedPoint?: { lat: number; lon: number } | null;
   height?: number;
@@ -115,6 +120,20 @@ export default function GeoMap({
       bounds.push([p.lat, p.lon]);
     }
 
+    if (parentFeature?.geometry) {
+      try {
+        const parentLayer = L.geoJSON(parentFeature.geometry as GeoJSON.GeoJsonObject, {
+          style: PARENT_STYLE,
+        });
+        parentLayer.bindTooltip(`${parentFeature.label} (reference)`);
+        parentLayer.addTo(layer);
+        const b = parentLayer.getBounds();
+        if (b.isValid()) bounds.push(b.getSouthWest(), b.getNorthEast());
+      } catch {
+        // A malformed parent geometry is not this view's problem to fix — just skip showing it.
+      }
+    }
+
     for (const f of features) {
       try {
         const geoLayer = L.geoJSON(f.geometry as GeoJSON.GeoJsonObject, {
@@ -145,14 +164,20 @@ export default function GeoMap({
     if (bounds.length > 0) {
       map.fitBounds(L.latLngBounds(bounds), { padding: [24, 24], maxZoom: 17 });
     }
-  }, [points, features, pickedPoint]);
+  }, [points, features, parentFeature, pickedPoint]);
 
   return (
     <div>
       <div ref={containerRef} style={{ height, borderRadius: 8, overflow: "hidden" }} />
       {legend && (
         <div className="map-legend">
-          {LEGEND.map(([kind, label]) => (
+          {parentFeature && (
+            <span>
+              <i style={{ background: PARENT_STYLE.color as string }} />
+              {parentFeature.label} (reference)
+            </span>
+          )}
+          {LEGEND.filter(([kind]) => features.some((f) => f.kind === kind)).map(([kind, label]) => (
             <span key={kind}>
               <i style={{ background: STYLE[kind].color as string }} />
               {label}

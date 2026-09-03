@@ -8,11 +8,12 @@ import {
   Notice,
   PageTitle,
   Pager,
-  ShortId,
   Spinner,
   fmtDate,
   fmtPercent,
 } from "../components/Common";
+import GeoMap from "../components/GeoMap";
+import { shortRef } from "../lib/labels";
 
 export default function Detections() {
   const [data, setData] = useState<Paged<Detection> | null>(null);
@@ -95,8 +96,8 @@ export default function Detections() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Detection</th>
                       <th>Source image</th>
+                      <th>Flight</th>
                       <th>Class</th>
                       <th>Confidence</th>
                       <th>Created</th>
@@ -109,13 +110,9 @@ export default function Detections() {
                         onClick={() => void details(x.id)}
                         style={{ cursor: "pointer" }}
                       >
-                        <td>
-                          <ShortId value={x.id} />
-                        </td>
-                        <td>
-                          <ShortId value={x.imageId} />
-                        </td>
-                        <td>{x.classLabel}</td>
+                        <td>{x.sourceImageFileName || "Not available"}</td>
+                        <td>{x.flightMissionName || "Untitled flight"}</td>
+                        <td>{x.classLabel || "Unclassified"}</td>
                         <td className="confidence">
                           {fmtPercent(x.confidence)}
                         </td>
@@ -138,14 +135,18 @@ export default function Detections() {
           {!selected ? (
             <Empty
               title="Select a detection"
-              detail="Inspect model/version and the returned geographic geometry."
+              detail="Choose a row to see its boundary on the map and its compliance status."
             />
           ) : (
             <div className="form">
+              <Notice>
+                AI detection — not yet a confirmed violation. A human reviewer must confirm or
+                dismiss any resulting candidate case.
+              </Notice>
               <div className="detail-grid">
                 <div className="detail">
                   <small>Classification</small>
-                  <strong>{selected.classLabel}</strong>
+                  <strong>{selected.classLabel || "Unclassified"}</strong>
                 </div>
                 <div className="detail">
                   <small>Confidence</small>
@@ -153,31 +154,46 @@ export default function Detections() {
                 </div>
                 <div className="detail">
                   <small>Source image</small>
-                  <ShortId value={selected.imageId} />
+                  <strong>{selected.sourceImageFileName || "Not available"}</strong>
                 </div>
                 <div className="detail">
-                  <small>Model</small>
-                  <strong>{selected.modelName || "Not returned"}</strong>
+                  <small>Flight</small>
+                  <strong>{selected.flightMissionName || "Untitled flight"}</strong>
                 </div>
                 <div className="detail">
-                  <small>Version</small>
-                  <strong>{selected.modelVersion || "Not returned"}</strong>
+                  <small>Detected on</small>
+                  <strong>{fmtDate(selected.createdAt)}</strong>
                 </div>
                 <div className="detail">
-                  <small>Analysis</small>
-                  <ShortId value={selected.imageAnalysisId} />
+                  <small>Reference</small>
+                  <strong>Detection {shortRef(selected.id)}</strong>
                 </div>
               </div>
-              <label>
-                Geometry summary
-                <pre className="code">
-                  {JSON.stringify(selected.geometry, null, 2)}
-                </pre>
-              </label>
-              <Notice>
-                AI Detection → compliance evaluation may create a Candidate
-                Violation → human review may Confirm or Dismiss it.
-              </Notice>
+              {selected.geometry ? (
+                <GeoMap
+                  features={[
+                    { id: selected.id, geometry: selected.geometry, kind: "detection", label: "AI detection" },
+                  ]}
+                  legend
+                />
+              ) : (
+                <Notice kind="info">No geographic boundary is available for this detection.</Notice>
+              )}
+              {(selected.modelName || selected.modelVersion) && (
+                <details className="technical-info">
+                  <summary>Technical information</summary>
+                  <div className="detail-grid">
+                    <div className="detail">
+                      <small>Model</small>
+                      <strong>{selected.modelName || "Not returned"}</strong>
+                    </div>
+                    <div className="detail">
+                      <small>Model version</small>
+                      <strong>{selected.modelVersion || "Not returned"}</strong>
+                    </div>
+                  </div>
+                </details>
+              )}
             </div>
           )}
         </Card>

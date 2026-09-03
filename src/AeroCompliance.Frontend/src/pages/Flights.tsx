@@ -20,8 +20,9 @@ import {
   Status,
   fmtDate,
 } from "../components/Common";
+import GeometryEditor from "../components/GeometryEditor";
+import type { NormalizedMultiPolygon } from "../lib/geometry";
 
-const emptyArea = '{"type":"MultiPolygon","coordinates":[]}';
 export default function Flights() {
   const { user } = useAuth();
   const [data, setData] = useState<Paged<FlightSummary> | null>(null);
@@ -36,7 +37,7 @@ export default function Flights() {
     municipalityId: user?.municipality?.id || "",
     droneOperatorId: user?.role.name === "DroneOperator" ? user.id : "",
     scheduledAt: "",
-    plannedArea: "",
+    plannedArea: null as NormalizedMultiPolygon | null,
   });
   const load = useCallback(async () => {
     try {
@@ -70,9 +71,6 @@ export default function Flights() {
     setBusy(true);
     setError("");
     try {
-      const area = form.plannedArea.trim()
-        ? JSON.parse(form.plannedArea)
-        : null;
       await api.post("/flights", {
         municipalityId: form.municipalityId || undefined,
         droneOperatorId: form.droneOperatorId || undefined,
@@ -80,7 +78,7 @@ export default function Flights() {
         scheduledAt: form.scheduledAt
           ? new Date(form.scheduledAt).toISOString()
           : null,
-        plannedArea: area,
+        plannedArea: form.plannedArea,
         qualityFlag: true,
       });
       setShow(false);
@@ -88,15 +86,11 @@ export default function Flights() {
         ...x,
         missionName: "",
         scheduledAt: "",
-        plannedArea: "",
+        plannedArea: null,
       }));
       await load();
     } catch (e) {
-      setError(
-        e instanceof SyntaxError
-          ? "Planned area must be valid GeoJSON."
-          : errorMessage(e),
-      );
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -195,13 +189,10 @@ export default function Flights() {
               </label>
             </div>
             <label>
-              Planned area GeoJSON (optional)
-              <textarea
-                placeholder={emptyArea}
-                value={form.plannedArea}
-                onChange={(e) =>
-                  setForm({ ...form, plannedArea: e.target.value })
-                }
+              Planned area (optional)
+              <GeometryEditor
+                onChange={(g) => setForm((f) => ({ ...f, plannedArea: g }))}
+                boundaryLabel="planned area"
               />
             </label>
             <div>

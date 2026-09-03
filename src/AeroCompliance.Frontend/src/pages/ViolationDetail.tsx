@@ -8,13 +8,13 @@ import {
   Card,
   Notice,
   PageTitle,
-  ShortId,
   Spinner,
   Status,
   fmtDate,
   fmtPercent,
 } from "../components/Common";
 import GeoMap, { type FeatureKind } from "../components/GeoMap";
+import { humanizeCode, shortRef } from "../lib/labels";
 
 // Detection != violation: the map style below always distinguishes the raw AI proposal (never shown
 // here — this page only ever shows a *reviewed* candidate) from where that candidate currently
@@ -83,7 +83,7 @@ export default function ViolationDetail() {
     <div className="page">
       <PageTitle
         title="Violation Case"
-        description={id}
+        description={id ? `Case ${shortRef(id)}` : undefined}
         actions={
           <>
             <Link className="secondary" to="/violations">
@@ -103,6 +103,11 @@ export default function ViolationDetail() {
           <div className="grid">
             <Card>
               <h2>Candidate violation</h2>
+              <Notice>
+                {data.status === "under_review"
+                  ? "AI detection — not yet a confirmed violation. Review the evidence below before deciding."
+                  : `This candidate has been reviewed: ${humanizeCode(data.status)}.`}
+              </Notice>
               <div className="detail-grid">
                 <div className="detail">
                   <small>Status</small>
@@ -110,7 +115,7 @@ export default function ViolationDetail() {
                 </div>
                 <div className="detail">
                   <small>Type</small>
-                  <strong>{data.violationType.replaceAll("_", " ")}</strong>
+                  <strong>{humanizeCode(data.violationType)}</strong>
                 </div>
                 <div className="detail">
                   <small>AI confidence</small>
@@ -119,14 +124,22 @@ export default function ViolationDetail() {
                   </strong>
                 </div>
                 <div className="detail">
-                  <small>Detection</small>
-                  <strong>
-                    AI Detection · <ShortId value={data.detectionId} />
-                  </strong>
+                  <small>Detected class</small>
+                  <strong>{data.detectionClass || "Unclassified"}</strong>
                 </div>
                 <div className="detail">
-                  <small>Detected class</small>
-                  <strong>{data.detectionClass}</strong>
+                  <small>Source image</small>
+                  <strong>{data.sourceImageFileName || "Not available"}</strong>
+                </div>
+                <div className="detail">
+                  <small>Flight</small>
+                  {data.flightId ? (
+                    <Link to={`/flights/${data.flightId}`}>
+                      {data.flightMissionName || "Untitled flight"}
+                    </Link>
+                  ) : (
+                    <strong>Not available</strong>
+                  )}
                 </div>
                 <div className="detail">
                   <small>Exceedance area</small>
@@ -136,57 +149,58 @@ export default function ViolationDetail() {
                       : "—"}
                   </strong>
                 </div>
+                <div className="detail">
+                  <small>Reference</small>
+                  <strong>Detection {shortRef(data.detectionId)}</strong>
+                </div>
               </div>
             </Card>
-            {detection?.geometry != null && (
+            {detection?.geometry != null ? (
               <Card>
-                <h2>Geometry</h2>
+                <h2>Boundary</h2>
                 <GeoMap
                   features={[
                     {
                       id: data.detectionId,
                       geometry: detection.geometry,
                       kind: statusToFeatureKind(data.status),
-                      label: `${data.violationType.replaceAll("_", " ")} · ${data.status.replaceAll("_", " ")}`,
+                      label: `${humanizeCode(data.violationType)} · ${humanizeCode(data.status)}`,
                     },
                   ]}
                   legend
                 />
               </Card>
+            ) : (
+              <Notice kind="info">No geographic boundary is available for this detection.</Notice>
             )}
             <Card>
               <h2>Related records</h2>
               <div className="detail-grid">
                 <div className="detail">
-                  <small>Flight</small>
-                  <Link to={data.flightId ? `/flights/${data.flightId}` : "#"}>
-                    <ShortId value={data.flightId} />
-                  </Link>
-                </div>
-                <div className="detail">
                   <small>Parcel</small>
-                  <ShortId value={data.parcelId} />
+                  <strong>{data.parcelNumber ? `Parcel ${data.parcelNumber}` : "Not applicable"}</strong>
                 </div>
                 <div className="detail">
                   <small>Road</small>
-                  <ShortId value={data.roadId} />
+                  <strong>{data.roadCode ? `Road ${data.roadCode}` : "Not applicable"}</strong>
                 </div>
                 <div className="detail">
                   <small>Zone</small>
-                  <ShortId value={data.zoneId} />
+                  <strong>{data.zoneNumber ? `Zone ${data.zoneNumber}` : "Not applicable"}</strong>
                 </div>
                 <div className="detail">
-                  <small>Rule</small>
-                  <ShortId value={data.ruleId} />
+                  <small>Block</small>
+                  <strong>{data.blockNumber ? `Block ${data.blockNumber}` : "Not applicable"}</strong>
+                </div>
+                <div className="detail">
+                  <small>Zoning rule</small>
+                  <strong>{data.ruleKey || "Not applicable"}</strong>
                 </div>
                 <div className="detail">
                   <small>Evidence image</small>
-                  <ShortId value={data.evidenceImageId} />
+                  <strong>{data.evidenceImageId ? "Available" : "Not attached"}</strong>
                 </div>
               </div>
-              {data.evidenceStoragePath && (
-                <p className="mono">{data.evidenceStoragePath}</p>
-              )}
             </Card>
           </div>
           <div className="grid">
@@ -195,7 +209,7 @@ export default function ViolationDetail() {
               <div className="timeline">
                 {data.statusHistory.map((h, i) => (
                   <div className="timeline-item" key={`${h.changedAt}-${i}`}>
-                    <strong>{h.status.replaceAll("_", " ")}</strong>
+                    <strong>{humanizeCode(h.status)}</strong>
                     <p>{h.notes || "No notes"}</p>
                     <small>{fmtDate(h.changedAt)}</small>
                   </div>

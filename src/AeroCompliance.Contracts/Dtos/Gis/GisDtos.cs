@@ -15,7 +15,7 @@ public sealed class SaveZoneRequest
     [StringLength(255)] public string? SourceDocument { get; init; }
 }
 
-public sealed record BlockDto(Guid Id, Guid ZoneId, string BlockNumber, JsonElement Geometry, DateTimeOffset CreatedAt);
+public sealed record BlockDto(Guid Id, Guid ZoneId, string? ZoneNumber, string BlockNumber, JsonElement Geometry, DateTimeOffset CreatedAt);
 public sealed class SaveBlockRequest
 {
     public Guid ZoneId { get; init; }
@@ -23,8 +23,8 @@ public sealed class SaveBlockRequest
     [Required] public JsonElement Geometry { get; init; }
 }
 
-public sealed record ParcelSummaryDto(Guid Id, Guid BlockId, string ParcelNumber, string? ZoneType, decimal? AreaM2, JsonElement Geometry);
-public sealed record ParcelDetailsDto(Guid Id, Guid BlockId, string ParcelNumber, string? OwnerName, string? ZoneType, decimal? AreaM2, JsonElement Geometry, string Source, DateTimeOffset CreatedAt);
+public sealed record ParcelSummaryDto(Guid Id, Guid BlockId, string? BlockNumber, string? ZoneNumber, string ParcelNumber, string? ZoneType, decimal? AreaM2, JsonElement Geometry);
+public sealed record ParcelDetailsDto(Guid Id, Guid BlockId, string? BlockNumber, string? ZoneNumber, string ParcelNumber, string? OwnerName, string? ZoneType, decimal? AreaM2, JsonElement Geometry, string Source, DateTimeOffset CreatedAt);
 public sealed class SaveParcelRequest
 {
     public Guid BlockId { get; init; }
@@ -50,8 +50,8 @@ public sealed class SaveRoadRequest
     [Required] public JsonElement Geometry { get; init; }
 }
 
-public sealed record ZoningRuleDto(Guid Id, Guid MunicipalityId, Guid? ZoneId, string? ZoneType, string RuleKey, decimal RuleValue,
-    string Unit, string? SourceDocument, bool ExtractedByAi, bool IsValidated, Guid? ValidatedBy,
+public sealed record ZoningRuleDto(Guid Id, Guid MunicipalityId, Guid? ZoneId, string? ZoneNumber, string? ZoneType, string RuleKey, decimal RuleValue,
+    string Unit, string? SourceDocument, bool ExtractedByAi, bool IsValidated, Guid? ValidatedBy, string? ValidatorName,
     DateTimeOffset? ValidatedAt, bool IsActive, DateTimeOffset CreatedAt);
 public sealed class SaveZoningRuleRequest
 {

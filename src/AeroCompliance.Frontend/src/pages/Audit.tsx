@@ -8,10 +8,38 @@ import {
   Notice,
   PageTitle,
   Pager,
-  ShortId,
   Spinner,
   fmtDate,
 } from "../components/Common";
+import { deriveEntityReference, diffAuditState } from "../lib/audit";
+import { humanizeCode } from "../lib/labels";
+
+function ChangeList({ entry }: { entry: AuditEntry }) {
+  const changes = diffAuditState(entry.beforeState, entry.afterState);
+  if (!changes || changes.length === 0) {
+    // Either nothing could be safely read as field-level changes, or nothing actually changed —
+    // either way, the raw snapshot is never shown to the user.
+    return <span className="muted">No further details recorded.</span>;
+  }
+  return (
+    <div className="audit-changes">
+      {changes.map((c) => (
+        <div className="change-row" key={c.label}>
+          <b>{c.label}:</b>
+          {c.before === null ? (
+            <span>{c.after}</span>
+          ) : c.after === null ? (
+            <span>{c.before} (removed)</span>
+          ) : (
+            <span>
+              {humanizeCode(c.before)} → {humanizeCode(c.after)}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function Audit() {
   const [data, setData] = useState<Paged<AuditEntry> | null>(null);
@@ -42,7 +70,7 @@ export default function Audit() {
     <div className="page">
       <PageTitle
         title="Audit Trail"
-        description="Immutable backend audit events within your authorized scope."
+        description="A human-readable history of changes within your authorized scope."
         actions={
           <button className="secondary" onClick={() => void load()}>
             <RefreshCw size={14} />
@@ -75,7 +103,7 @@ export default function Audit() {
             />
             <input
               style={{ paddingLeft: 28 }}
-              placeholder="Entity GUID"
+              placeholder="Entity reference (id)"
               value={entityId}
               onChange={(e) => {
                 setP(1);
@@ -100,7 +128,7 @@ export default function Audit() {
                   <tr>
                     <th>Time</th>
                     <th>Action</th>
-                    <th>Entity</th>
+                    <th>Entity type</th>
                     <th>Reference</th>
                     <th>Actor</th>
                     <th>Change</th>
@@ -110,21 +138,14 @@ export default function Audit() {
                   {data.items.map((x) => (
                     <tr key={x.id}>
                       <td>{fmtDate(x.createdAt)}</td>
-                      <td>{x.action}</td>
+                      <td>{humanizeCode(x.action)}</td>
                       <td>{x.entityType}</td>
                       <td>
-                        <ShortId value={x.entityId} />
+                        {deriveEntityReference(x.entityType, x.beforeState, x.afterState, x.entityId)}
                       </td>
                       <td>{x.actorName || "System"}</td>
                       <td>
-                        <details>
-                          <summary>View</summary>
-                          <pre className="code">
-                            {x.afterState ||
-                              x.beforeState ||
-                              "No serialized state"}
-                          </pre>
-                        </details>
+                        <ChangeList entry={x} />
                       </td>
                     </tr>
                   ))}

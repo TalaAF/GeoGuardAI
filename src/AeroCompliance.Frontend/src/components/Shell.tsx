@@ -73,9 +73,9 @@ export default function Shell() {
         <header>
           <div>
             <strong>
-              {user?.municipality?.name || "Platform administration"}
+              {user?.municipality?.name || "All municipalities (platform-wide access)"}
             </strong>
-            <small>Connected to AeroCompliance API</small>
+            <small>Connected to AeroCompliance</small>
           </div>
           <div className="profile">
             <span className="avatar">

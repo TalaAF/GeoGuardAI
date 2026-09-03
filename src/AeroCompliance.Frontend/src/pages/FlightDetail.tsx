@@ -24,6 +24,7 @@ import {
 import FlightEdit from "../components/FlightEdit";
 import ImageUploadPanel from "../components/ImageUploadPanel";
 import GeoMap, { type MapFeature, type MapPoint } from "../components/GeoMap";
+import { captureTimeSourceLabel, humanizeCode, locationSourceLabel, shortRef } from "../lib/labels";
 
 export default function FlightDetail() {
   const { id } = useParams();
@@ -108,7 +109,7 @@ export default function FlightDetail() {
     <div className="page">
       <PageTitle
         title={flight?.missionName || "Flight details"}
-        description={id}
+        description={id ? `Flight ${shortRef(id)}` : undefined}
         actions={
           <>
             <Link className="secondary" to="/flights">
@@ -195,20 +196,17 @@ export default function FlightDetail() {
                       <thead>
                         <tr>
                           <th>File</th>
-                          <th>Image</th>
                           <th>Status</th>
                           <th>Attempts</th>
                           <th>Captured</th>
                           <th>Location</th>
+                          <th>Geospatial info</th>
                         </tr>
                       </thead>
                       <tbody>
                         {images.map((x) => (
                           <tr key={x.id}>
                             <td>{x.originalFileName}</td>
-                            <td>
-                              <ShortId value={x.id} />
-                            </td>
                             <td>
                               <Status value={x.processingStatus} />
                               {x.metadataRequiresReview && (
@@ -224,7 +222,7 @@ export default function FlightDetail() {
                                 <span
                                   className={`badge-source ${x.captureTimeSource.toLowerCase()}`}
                                 >
-                                  {x.captureTimeSource}
+                                  {captureTimeSourceLabel(x.captureTimeSource)}
                                 </span>
                               </div>
                             </td>
@@ -236,9 +234,38 @@ export default function FlightDetail() {
                                 <span
                                   className={`badge-source ${x.locationSource.toLowerCase()}`}
                                 >
-                                  {x.locationSource}
+                                  {locationSourceLabel(x.locationSource)}
                                 </span>
                               </div>
+                            </td>
+                            <td>
+                              {x.sourceRasterCrs || x.rasterWidth ? (
+                                <details className="technical-info">
+                                  <summary>View</summary>
+                                  <div className="detail-grid">
+                                    <div className="detail">
+                                      <small>Coordinate system</small>
+                                      <strong>{x.sourceRasterCrs || "Not available"}</strong>
+                                    </div>
+                                    <div className="detail">
+                                      <small>Dimensions</small>
+                                      <strong>
+                                        {x.rasterWidth && x.rasterHeight
+                                          ? `${x.rasterWidth} × ${x.rasterHeight} pixels`
+                                          : "Not available"}
+                                      </strong>
+                                    </div>
+                                    <div className="detail">
+                                      <small>Georeferencing</small>
+                                      <strong>
+                                        {x.sourceRasterCrs ? "Available" : "Not available"}
+                                      </strong>
+                                    </div>
+                                  </div>
+                                </details>
+                              ) : (
+                                "—"
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -382,26 +409,19 @@ export default function FlightDetail() {
                   </p>
                   {detections.map((d) => (
                     <div className="detail" key={d.id}>
-                      <small>
-                        AI Detection · <ShortId value={d.id} />
-                      </small>
+                      <small>AI detection · Detection {shortRef(d.id)}</small>
                       <strong>
-                        {d.classLabel} ·{" "}
+                        {d.classLabel || "Unclassified"} ·{" "}
                         <span className="confidence">
                           {fmtPercent(d.confidence)}
                         </span>
                       </strong>
-                      {d.modelName && (
-                        <p>
-                          {d.modelName} {d.modelVersion}
-                        </p>
-                      )}
                     </div>
                   ))}
                   {violations.map((v) => (
                     <p key={v.id}>
                       <Link className="secondary" to={`/violations/${v.id}`}>
-                        Open candidate <ShortId value={v.id} />
+                        Open {humanizeCode(v.violationType)} candidate
                       </Link>
                     </p>
                   ))}

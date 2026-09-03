@@ -296,13 +296,13 @@ export default function ImageUploadPanel({
                     {!x.exifChecked ? (
                       "…"
                     ) : x.exif?.latitude && x.exif?.longitude ? (
-                      <span className="badge-source exif">EXIF GPS</span>
+                      <span className="badge-source exif">Drone metadata</span>
                     ) : x.receipt?.locationSource === "GeoTiff" ? (
                       <span className="badge-source geotiff">GeoTIFF</span>
                     ) : pickedPoint ? (
-                      <span className="badge-source">Map fallback</span>
+                      <span className="badge-source">Selected on map</span>
                     ) : (
-                      <span className="badge-source missing">No GPS found</span>
+                      <span className="badge-source missing">No location found</span>
                     )}
                   </td>
                   <td>
