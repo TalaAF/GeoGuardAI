@@ -436,6 +436,14 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(6,2)")
                         .HasColumnName("camera_heading_deg");
 
+                    b.Property<string>("CaptureTimeSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Missing")
+                        .HasColumnName("capture_time_source");
+
                     b.Property<DateTimeOffset>("CapturedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("captured_at");
@@ -486,9 +494,23 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("latitude");
 
+                    b.Property<string>("LocationSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Missing")
+                        .HasColumnName("location_source");
+
                     b.Property<double?>("Longitude")
                         .HasColumnType("double precision")
                         .HasColumnName("longitude");
+
+                    b.Property<bool>("MetadataRequiresReview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("metadata_requires_review");
 
                     b.Property<string>("ObjectKey")
                         .IsRequired()

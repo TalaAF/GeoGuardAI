@@ -79,6 +79,14 @@ public sealed class AnalysisResultConsumer(IConnection connection, IServiceScope
         if (db.Entry(analysis).State == EntityState.Detached) db.ImageAnalyses.Add(analysis);
         analysis.Mode=e.Mode;analysis.ModelName=e.ModelName;analysis.ModelVersion=e.ModelVersion;analysis.ConfidenceThreshold=e.ConfidenceThreshold;analysis.SourceCrs=e.SourceCrs;
         analysis.OutputCrs=e.OutputCrs;analysis.Status="EvaluatingCompliance";analysis.AttemptNumber=e.Attempt;analysis.StartedAt=e.StartedAt;analysis.CompletedAt=e.CompletedAt;analysis.DurationMs=e.DurationMs;
+        // Phase 5: persist raster georeferencing the AI Worker discovered via rasterio (GeoTIFF only;
+        // null on a non-raster source or a lightweight worker build without rasterio) onto the Image
+        // itself — only overwrite when a new value is actually present, so a later retry that can't
+        // re-derive it (e.g. rasterio missing) never clobbers a previously-known-good value.
+        if (e.SourceCrs is not null) image.SourceRasterCrs = e.SourceCrs;
+        if (e.RasterWidth is not null) image.RasterWidth = e.RasterWidth;
+        if (e.RasterHeight is not null) image.RasterHeight = e.RasterHeight;
+        if (e.AffineTransform is not null) image.AffineTransform = e.AffineTransform;
         image.ProcessingStatus=ImageProcessingStatus.EvaluatingCompliance; await db.SaveChangesAsync(ct);
         foreach (var item in e.Detections)
         {

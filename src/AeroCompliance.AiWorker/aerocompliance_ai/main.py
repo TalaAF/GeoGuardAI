@@ -5,6 +5,7 @@ from minio import Minio
 import pika
 from .config import Settings
 from .model import MockModelRunner, YoloModelRunner, ModelFailure
+from . import geospatial
 
 EXCHANGE="aerocompliance.processing"; REQUEST_KEY="image.processing.requested.v1"; STARTED_KEY="image.analysis.started.v1"; COMPLETED_KEY="image.analysis.completed.v1"; FAILED_KEY="image.analysis.failed.v1"; QUEUE="aerocompliance.ai.image-processing.v1"; DLQ="aerocompliance.ai.image-processing.dlq.v1"
 ready=False
@@ -36,8 +37,15 @@ class Worker:
                 with open(path,"rb") as source:
                     for chunk in iter(lambda:source.read(1024*1024),b""): digest.update(chunk)
                 if digest.hexdigest().lower()!=request["sha256"].lower(): raise ModelFailure("HASH_MISMATCH","Stored object hash does not match the processing request.")
-                detections=self.runner.analyze(request); completed_at=utcnow()
-                self.publish(ch,COMPLETED_KEY,{**base,"eventId":str(uuid.uuid5(uuid.UUID(request["requestId"]),"completed")),"occurredAt":completed_at,"mode":self.s.mode,"modelName":self.s.model_name,"modelVersion":self.s.model_version,"confidenceThreshold":self.s.threshold,"sourceCrs":None,"outputCrs":"EPSG:4326","startedAt":started_at,"completedAt":completed_at,"durationMs":int((time.monotonic()-started_clock)*1000),"detections":detections})
+                # Phase 5: best-effort GeoTIFF raster-metadata extraction, independent of AI_MODE. A
+                # missing/invalid raster here never fails *mock* processing (mock doesn't need it) —
+                # AI_MODE=yolo's own runner.analyze() call below separately (and fatally) requires it.
+                raster=self._extract_raster_metadata(request,path)
+                detections=self.runner.analyze(request,path); completed_at=utcnow()
+                self.publish(ch,COMPLETED_KEY,{**base,"eventId":str(uuid.uuid5(uuid.UUID(request["requestId"]),"completed")),"occurredAt":completed_at,"mode":self.s.mode,"modelName":self.s.model_name,"modelVersion":self.s.model_version,"confidenceThreshold":self.s.threshold,
+                    "sourceCrs":raster.crs if raster else None,"outputCrs":"EPSG:4326","startedAt":started_at,"completedAt":completed_at,"durationMs":int((time.monotonic()-started_clock)*1000),"detections":detections,
+                    "rasterWidth":raster.width if raster else None,"rasterHeight":raster.height if raster else None,
+                    "affineTransform":json.dumps(raster.affine_transform) if raster else None})
             finally:
                 if os.path.exists(path): os.remove(path)
             ch.basic_ack(method.delivery_tag)
@@ -48,6 +56,23 @@ class Worker:
                 self.publish(ch,FAILED_KEY,{**base,"eventId":str(uuid.uuid5(uuid.UUID(request["requestId"]),"failed")),"stage":"analysis","errorCode":code,"message":message,"retryable":code not in ("MALFORMED_REQUEST","MISSING_CAPTURE_COORDINATES"),"failedAt":failed_at})
                 ch.basic_ack(method.delivery_tag)
             else: ch.basic_nack(method.delivery_tag,requeue=False)
+    def _extract_raster_metadata(self, request: dict, path: str):
+        """Best-effort GeoTIFF raster-metadata extraction, independent of AI_MODE. Returns None for a
+        non-raster source, when rasterio isn't installed (lightweight build), or when the raster
+        turns out not to be genuinely georeferenced — logged, never fatal here (mock mode doesn't
+        need it; AI_MODE=yolo separately requires it inside runner.analyze()).
+        """
+        object_key = (request.get("objectKey") or "").lower()
+        content_type = (request.get("contentType") or "").lower()
+        is_tiff = object_key.endswith((".tif", ".tiff")) or content_type in ("image/tiff", "image/geotiff")
+        if not is_tiff:
+            return None
+        try:
+            return geospatial.extract_raster_metadata(path)
+        except geospatial.GeoreferencingError as exc:
+            print(f"raster metadata unavailable for {request.get('imageId')}: {exc.code}: {exc}", flush=True)
+            return None
+
     def run(self):
         global ready
         while True:

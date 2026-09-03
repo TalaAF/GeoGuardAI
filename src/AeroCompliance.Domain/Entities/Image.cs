@@ -53,6 +53,25 @@ public class Image
     public int? RasterWidth { get; set; }
     public int? RasterHeight { get; set; }
     public string? AffineTransform { get; set; }
+
+    /// <summary>
+    /// Provenance of <see cref="Latitude"/>/<see cref="Longitude"/>: <c>"GeoTiff"</c> (raster
+    /// georeferencing, set by <c>ProcessingService</c> once the AI Worker reports it),
+    /// <c>"Exif"</c> (extracted server-side from a JPEG on upload), <c>"UserProvided"</c> (typed or
+    /// map-picked by the caller), or <c>"Missing"</c>. See Phase 5 precedence rules in the README.
+    /// </summary>
+    public string LocationSource { get; set; } = "Missing";
+
+    /// <summary>Provenance of <see cref="CapturedAt"/>: <c>"Exif"</c>, <c>"UserProvided"</c>, or
+    /// <c>"Missing"</c> (falls back to upload time).</summary>
+    public string CaptureTimeSource { get; set; } = "Missing";
+
+    /// <summary>
+    /// True when location and/or capture time could not be established from the file or the caller
+    /// and a human should confirm/correct it (e.g. via the frontend's map picker).
+    /// </summary>
+    public bool MetadataRequiresReview { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public ICollection<ImageAnalysis> Analyses { get; set; } = new List<ImageAnalysis>();

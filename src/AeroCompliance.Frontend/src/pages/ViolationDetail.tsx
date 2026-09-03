@@ -2,7 +2,7 @@ import { ArrowLeft, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError, errorMessage } from "../api/client";
-import type { ViolationDetails } from "../api/types";
+import type { Detection, ViolationDetails } from "../api/types";
 import { hasRole, useAuth } from "../auth/AuthContext";
 import {
   Card,
@@ -14,11 +14,22 @@ import {
   fmtDate,
   fmtPercent,
 } from "../components/Common";
+import GeoMap, { type FeatureKind } from "../components/GeoMap";
+
+// Detection != violation: the map style below always distinguishes the raw AI proposal (never shown
+// here — this page only ever shows a *reviewed* candidate) from where that candidate currently
+// stands in the confirm/dismiss workflow.
+function statusToFeatureKind(status: string): FeatureKind {
+  if (status === "under_review") return "candidate";
+  if (status === "dismissed") return "dismissed";
+  return "confirmed"; // confirmed_under_notification, notified, under_dispute, paused, resolved
+}
 
 export default function ViolationDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const [data, setData] = useState<ViolationDetails | null>(null);
+  const [detection, setDetection] = useState<Detection | null>(null);
   const [error, setError] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -27,7 +38,9 @@ export default function ViolationDetail() {
     if (!id) return;
     setError("");
     try {
-      setData((await api.get<ViolationDetails>(`/violations/${id}`)).data);
+      const violation = (await api.get<ViolationDetails>(`/violations/${id}`)).data;
+      setData(violation);
+      setDetection((await api.get<Detection>(`/detections/${violation.detectionId}`)).data);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -125,6 +138,22 @@ export default function ViolationDetail() {
                 </div>
               </div>
             </Card>
+            {detection?.geometry != null && (
+              <Card>
+                <h2>Geometry</h2>
+                <GeoMap
+                  features={[
+                    {
+                      id: data.detectionId,
+                      geometry: detection.geometry,
+                      kind: statusToFeatureKind(data.status),
+                      label: `${data.violationType.replaceAll("_", " ")} · ${data.status.replaceAll("_", " ")}`,
+                    },
+                  ]}
+                  legend
+                />
+              </Card>
+            )}
             <Card>
               <h2>Related records</h2>
               <div className="detail-grid">

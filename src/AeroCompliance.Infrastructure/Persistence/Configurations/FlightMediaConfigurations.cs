@@ -131,6 +131,9 @@ public class ImageConfiguration : IEntityTypeConfiguration<Image>
         b.Property(x => x.RasterWidth).HasColumnName("raster_width");
         b.Property(x => x.RasterHeight).HasColumnName("raster_height");
         b.Property(x => x.AffineTransform).HasColumnName("affine_transform").HasColumnType("jsonb");
+        b.Property(x => x.LocationSource).HasColumnName("location_source").HasMaxLength(20).HasDefaultValue("Missing").IsRequired();
+        b.Property(x => x.CaptureTimeSource).HasColumnName("capture_time_source").HasMaxLength(20).HasDefaultValue("Missing").IsRequired();
+        b.Property(x => x.MetadataRequiresReview).HasColumnName("metadata_requires_review").HasDefaultValue(false);
         b.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
 
         b.HasIndex(x => x.Geom).HasMethod("gist");

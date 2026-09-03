@@ -101,6 +101,8 @@ export interface Mission {
   overlapPercent: number | null;
   notes: string | null;
 }
+/** Provenance of an extracted/typed value. See the root README's "Metadata precedence" section. */
+export type MetadataSource = "GeoTiff" | "Exif" | "UserProvided" | "Missing";
 export interface ImageInfo {
   id: string;
   flightId: string;
@@ -118,6 +120,12 @@ export interface ImageInfo {
   attemptCount: number;
   uploadCompletedAt: string | null;
   createdAt: string;
+  locationSource: MetadataSource;
+  captureTimeSource: MetadataSource;
+  metadataRequiresReview: boolean;
+  sourceRasterCrs: string | null;
+  rasterWidth: number | null;
+  rasterHeight: number | null;
 }
 export interface ImageReceipt {
   imageId: string;
@@ -127,6 +135,12 @@ export interface ImageReceipt {
   byteLength: number;
   sha256Hash: string;
   statusUrl: string;
+  effectiveCapturedAt: string;
+  effectiveLatitude: number | null;
+  effectiveLongitude: number | null;
+  locationSource: MetadataSource;
+  captureTimeSource: MetadataSource;
+  metadataRequiresReview: boolean;
 }
 export interface ProcessingStatus {
   imageId: string;
