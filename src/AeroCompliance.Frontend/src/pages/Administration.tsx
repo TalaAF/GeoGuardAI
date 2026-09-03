@@ -31,6 +31,8 @@ export default function Administration() {
   const [message, setMessage] = useState("");
   const [show, setShow] = useState(false);
   const [editing, setEditing] = useState<UserInfo | null>(null);
+  const [editingMunicipality, setEditingMunicipality] =
+    useState<Municipality | null>(null);
   const [userForm, setUserForm] = useState({
     fullName: "",
     email: "",
@@ -130,7 +132,12 @@ export default function Administration() {
   const saveMunicipality = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await api.post("/municipalities", municipalityForm);
+      if (editingMunicipality)
+        await api.put(
+          `/municipalities/${editingMunicipality.id}`,
+          municipalityForm,
+        );
+      else await api.post("/municipalities", municipalityForm);
       setMunicipalityForm({
         name: "",
         region: "",
@@ -138,7 +145,10 @@ export default function Administration() {
         isPilot: false,
       });
       setShow(false);
-      setMessage("Municipality created.");
+      setMessage(
+        editingMunicipality ? "Municipality updated." : "Municipality created.",
+      );
+      setEditingMunicipality(null);
       await load();
     } catch (e) {
       setError(errorMessage(e));
@@ -186,6 +196,13 @@ export default function Administration() {
           onClick={() => {
             setShow(!show);
             resetUser();
+            setEditingMunicipality(null);
+            setMunicipalityForm({
+              name: "",
+              region: "",
+              apiAccessEnabled: true,
+              isPilot: false,
+            });
           }}
         >
           <Plus size={14} />
@@ -324,7 +341,11 @@ export default function Administration() {
               />{" "}
               API access enabled
             </label>
-            <button className="primary">Create municipality</button>
+            <button className="primary">
+              {editingMunicipality
+                ? "Save municipality"
+                : "Create municipality"}
+            </button>
           </form>
         )}
         <div style={{ marginTop: 16 }}>
@@ -401,6 +422,7 @@ export default function Administration() {
                     <th>Reference</th>
                     <th>API access</th>
                     <th>Created</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -413,6 +435,23 @@ export default function Administration() {
                       </td>
                       <td>{x.apiAccessEnabled ? "Enabled" : "Disabled"}</td>
                       <td>{fmtDate(x.createdAt)}</td>
+                      <td>
+                        <button
+                          className="secondary"
+                          onClick={() => {
+                            setEditingMunicipality(x);
+                            setMunicipalityForm({
+                              name: x.name,
+                              region: x.region || "",
+                              apiAccessEnabled: x.apiAccessEnabled,
+                              isPilot: x.isPilot,
+                            });
+                            setShow(true);
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

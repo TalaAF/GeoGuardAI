@@ -40,14 +40,13 @@ function AppRoutes() {
         <Route path="analytics" element={<Unavailable feature="Analytics" />} />
         <Route path="reports" element={<Unavailable feature="Reports" />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="*" element={<Unavailable notFound />} />
       </Route>
       <Route element={<Protected roles={["Admin", "MunicipalityManager"]} />}>
         {" "}
         <Route path="administration" element={<Administration />} />
         <Route path="audit" element={<Audit />} />
       </Route>
-      <Route path="/access-denied" element={<Unavailable access />} />
-      <Route path="*" element={<Unavailable notFound />} />
     </Routes>
   );
 }

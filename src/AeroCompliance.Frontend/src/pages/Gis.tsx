@@ -51,6 +51,7 @@ export default function Gis() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("zones");
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [selected, setSelected] = useState<Row | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
@@ -162,7 +163,13 @@ export default function Gis() {
       );
     }
   };
-  const edit = (row: Row) => {
+  const edit = async (row: Row) => {
+    try {
+      row = (await api.get<Row>(`/${tab}/${row.id}`)).data;
+    } catch (e) {
+      setError(errorMessage(e));
+      return;
+    }
     const r = row as unknown as Record<string, unknown>;
     setEditing(String(r.id));
     setForm({
@@ -194,6 +201,13 @@ export default function Gis() {
         : blankGeometry,
     });
     setShow(true);
+  };
+  const view = async (row: Row) => {
+    try {
+      setSelected((await api.get<Row>(`/${tab}/${row.id}`)).data);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   };
   const validate = async (id: string) => {
     try {
@@ -240,6 +254,7 @@ export default function Gis() {
               onClick={() => {
                 setTab(x);
                 setShow(false);
+                setSelected(null);
                 reset();
               }}
             >
@@ -598,15 +613,25 @@ export default function Gis() {
                         </td>
                         <td>
                           <div className="actions">
-                            {canManage && (
-                              <button
-                                className="secondary"
-                                onClick={() => edit(row)}
-                              >
-                                <Edit3 size={13} />
-                                Edit
-                              </button>
-                            )}
+                            <button
+                              className="secondary"
+                              onClick={() => void view(row)}
+                            >
+                              Details
+                            </button>
+                            {canManage &&
+                              !(
+                                tab === "parcels" &&
+                                user?.role.name === "GISAnalyst"
+                              ) && (
+                                <button
+                                  className="secondary"
+                                  onClick={() => void edit(row)}
+                                >
+                                  <Edit3 size={13} />
+                                  Edit
+                                </button>
+                              )}
                             {tab === "zoning-rules" &&
                               !r.isValidated &&
                               hasRole(user, ["Admin", "GISAnalyst"]) && (
@@ -628,6 +653,12 @@ export default function Gis() {
             </div>
           )}
         </div>
+        {selected && (
+          <div style={{ marginTop: 16 }}>
+            <h2>Selected record details</h2>
+            <pre className="code">{JSON.stringify(selected, null, 2)}</pre>
+          </div>
+        )}
       </Card>
     </div>
   );

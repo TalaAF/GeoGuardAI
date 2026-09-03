@@ -30,6 +30,7 @@ import {
   fmtDate,
   fmtPercent,
 } from "../components/Common";
+import FlightEdit from "../components/FlightEdit";
 
 const terminal = new Set([
   "Completed",
@@ -303,6 +304,11 @@ export default function FlightDetail() {
                 ))}
               </div>
             </Card>
+          )}
+          {canManage && flight.status === "planned" && (
+            <div style={{ marginTop: 16 }}>
+              <FlightEdit flight={flight} onSaved={load} />
+            </div>
           )}
           <div className="grid two-col" style={{ marginTop: 16 }}>
             <div className="grid">
