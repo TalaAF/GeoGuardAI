@@ -1,9 +1,9 @@
 import {
   AlertTriangle,
   BarChart3,
+  ClipboardCheck,
   FileQuestion,
   Gauge,
-  GitBranch,
   Layers3,
   LogOut,
   Map,
@@ -15,35 +15,43 @@ import {
   Users,
 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
-import { hasRole, useAuth } from "../auth/AuthContext";
-import type { Role } from "../api/types";
+import { useAuth } from "../auth/AuthContext";
+import type { Capability } from "../auth/capabilities";
+import { can } from "../auth/capabilities";
+import NotificationBell from "./NotificationBell";
 
-const nav: { to: string; label: string; icon: typeof Gauge; roles?: Role[] }[] =
-  [
-    { to: "/dashboard", label: "Dashboard", icon: Gauge },
-    { to: "/violations", label: "Violations", icon: AlertTriangle },
-    { to: "/flights", label: "Flights & Images", icon: Plane },
-    { to: "/detections", label: "AI Detections", icon: Radar },
-    { to: "/gis", label: "GIS Records", icon: Map },
-    {
-      to: "/administration",
-      label: "Administration",
-      icon: Users,
-      roles: ["Admin", "MunicipalityManager"],
-    },
-    {
-      to: "/audit",
-      label: "Audit Trail",
-      icon: ScrollText,
-      roles: ["Admin", "MunicipalityManager"],
-    },
-    { to: "/analytics", label: "Analytics", icon: BarChart3 },
-    { to: "/reports", label: "Reports", icon: FileQuestion },
-    { to: "/settings", label: "Settings", icon: Settings },
-  ];
+/**
+ * One entry per navigable area, each keyed to the exact capability its route is gated by. Filtered
+ * with the same `can()` check `RequireCapability` uses for routing, so the sidebar can never show
+ * a link the router would refuse — the two can't disagree because they share one source.
+ */
+const nav: { to: string; label: string; icon: typeof Gauge; capability: Capability }[] = [
+  { to: "/dashboard", label: "Dashboard", icon: Gauge, capability: "dashboard.view" },
+  { to: "/violations", label: "Violations", icon: AlertTriangle, capability: "violations.view" },
+  {
+    to: "/review-queue",
+    label: "Review Queue",
+    icon: ClipboardCheck,
+    capability: "reviewQueue.view",
+  },
+  { to: "/flights", label: "Flights & Images", icon: Plane, capability: "flights.view" },
+  { to: "/detections", label: "AI Detections", icon: Radar, capability: "detections.view" },
+  { to: "/gis", label: "GIS Records", icon: Map, capability: "gis.view" },
+  {
+    to: "/administration",
+    label: "Administration",
+    icon: Users,
+    capability: "administration.view",
+  },
+  { to: "/audit", label: "Audit Trail", icon: ScrollText, capability: "audit.view" },
+  { to: "/analytics", label: "Analytics", icon: BarChart3, capability: "analytics.view" },
+  { to: "/reports", label: "Reports", icon: FileQuestion, capability: "reports.view" },
+  { to: "/settings", label: "Settings", icon: Settings, capability: "settings.view" },
+];
 
 export default function Shell() {
   const { user, logout } = useAuth();
+
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -57,7 +65,7 @@ export default function Shell() {
         </div>
         <nav>
           {nav
-            .filter((x) => !x.roles || hasRole(user, x.roles))
+            .filter((x) => can(user, x.capability))
             .map(({ to, label, icon: Icon }) => (
               <NavLink key={to} to={to}>
                 <Icon size={17} />
@@ -78,6 +86,7 @@ export default function Shell() {
             <small>Connected to AeroCompliance</small>
           </div>
           <div className="profile">
+            <NotificationBell />
             <span className="avatar">
               {user?.fullName
                 .split(/\s+/)

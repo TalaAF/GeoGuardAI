@@ -46,6 +46,8 @@ public class AeroComplianceDbContext(DbContextOptions<AeroComplianceDbContext> o
     // Reporting / notifications / audit
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<PoliceAlert> PoliceAlerts => Set<PoliceAlert>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

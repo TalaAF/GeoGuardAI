@@ -4,6 +4,7 @@ import { Download, Search } from "lucide-react";
 import { api, errorMessage, page as fetchPage } from "../api/client";
 import type { Paged, ReportSummary } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { isPlatformAdmin } from "../auth/capabilities";
 import {
   Card,
   Empty,
@@ -17,7 +18,7 @@ import { downloadReport } from "../lib/reports";
 
 export default function Reports() {
   const { user } = useAuth();
-  const isAdmin = user?.role.name === "Admin";
+  const isAdmin = isPlatformAdmin(user);
   const [data, setData] = useState<Paged<ReportSummary> | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");

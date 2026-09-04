@@ -15,7 +15,8 @@ import type {
   ReportSummary,
   ViolationDetails,
 } from "../api/types";
-import { hasRole, useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/AuthContext";
+import { canGenerateViolationReport, canReviewViolations } from "../auth/capabilities";
 import {
   Card,
   Notice,
@@ -306,7 +307,7 @@ export default function ViolationDetail() {
               </div>
             </Card>
             {data.status === "under_review" &&
-              hasRole(user, ["Admin", "Reviewer", "Inspector"]) && (
+              canReviewViolations(user) && (
                 <Card>
                   <h2>Review decision</h2>
                   <div className="form">
@@ -340,7 +341,7 @@ export default function ViolationDetail() {
                   </div>
                 </Card>
               )}
-            {hasRole(user, ["Admin", "Reviewer", "Inspector"]) && (
+            {canGenerateViolationReport(user) && (
               <Card>
                 <h2>Formal report</h2>
                 {data.status !== CONFIRMED_STATUS ? (

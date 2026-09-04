@@ -17,7 +17,9 @@ import type { CurrentUser, TokenPair } from "../api/types";
 interface AuthState {
   user: CurrentUser | null;
   loading: boolean;
-  login(email: string, password: string): Promise<void>;
+  /** Resolves with the freshly signed-in user, so a caller can route by capability immediately
+   * rather than reading stale state from a closure. */
+  login(email: string, password: string): Promise<CurrentUser>;
   logout(): Promise<void>;
 }
 const AuthContext = createContext<AuthState | null>(null);
@@ -50,7 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ).data;
     storeTokens(tokens);
     try {
-      setUser((await api.get<CurrentUser>("/users/me")).data);
+      const me = (await api.get<CurrentUser>("/users/me")).data;
+      setUser(me);
+      return me;
     } catch (e) {
       clearTokens();
       throw e;
@@ -76,7 +80,7 @@ export function useAuth() {
   if (!value) throw new Error("AuthProvider missing");
   return value;
 }
-export const hasRole = (
-  user: CurrentUser | null,
-  roles: CurrentUser["role"]["name"][],
-) => !!user && roles.includes(user.role.name);
+// Authorization decisions live in ../auth/capabilities.ts, not here — that module is the single
+// source of truth mirroring the backend's actual policies. A raw role-list helper like the one
+// that used to live here is exactly the scattered-check pattern that made the frontend drift out
+// of sync with the backend; it was removed once its last caller was migrated.

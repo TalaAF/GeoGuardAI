@@ -1217,3 +1217,221 @@ textarea {
   font-size: 10px;
   color: #94a3b8;
 }
+
+/* --- Phase 8: notification bell and panel -------------------------------- */
+.bell-wrap {
+  position: relative;
+}
+.bell-button {
+  position: relative;
+}
+.bell-button:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+.bell-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.bell-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  z-index: 60;
+}
+.bell-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 11px 13px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.bell-panel > header strong {
+  font-size: 13px;
+}
+.bell-actions {
+  display: flex;
+  gap: 10px;
+}
+.link-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #1d4ed8;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.link-button:disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+.link-button:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.bell-list {
+  overflow-y: auto;
+}
+.bell-state {
+  padding: 22px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
+}
+.bell-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 11px 13px;
+  border-bottom: 1px solid #f1f5f9;
+  border-left: 3px solid transparent;
+}
+.bell-item.unread {
+  background: #f8fafc;
+}
+.bell-item.sev-critical {
+  border-left-color: #dc2626;
+}
+.bell-item.sev-attention {
+  border-left-color: #d97706;
+}
+.bell-item.sev-information {
+  border-left-color: #2563eb;
+}
+.bell-item-body {
+  flex: 1;
+  min-width: 0;
+}
+.bell-item-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bell-item-head strong {
+  font-size: 12px;
+}
+.bell-item-body p {
+  margin: 4px 0 5px;
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.45;
+}
+.bell-item-body small {
+  font-size: 10px;
+  color: #94a3b8;
+}
+.bell-item-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.bell-item-actions button {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sev-chip {
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.sev-chip.sev-critical {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.sev-chip.sev-attention {
+  background: #fef3c7;
+  color: #92400e;
+}
+.sev-chip.sev-information {
+  background: #dbeafe;
+  color: #1e40af;
+}
+@media (max-width: 640px) {
+  .bell-panel {
+    position: fixed;
+    top: 56px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+}
+
+/* --- Immediate fix: role-aware navigation ------------------------------- */
+.access-toast {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  background: #0f172a;
+  color: #fff;
+  font-size: 12.5px;
+  padding: 9px 16px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28);
+}
+.pref-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.pref-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.pref-row div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pref-row strong {
+  font-size: 12.5px;
+}
+.pref-row small {
+  font-size: 11px;
+  color: #64748b;
+}
+.pref-locked {
+  color: #b45309 !important;
+}
+.pref-row input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}

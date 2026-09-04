@@ -6,6 +6,7 @@ using AeroCompliance.Contracts.Messaging.Messages;
 using AeroCompliance.Domain.Entities;
 using AeroCompliance.Domain.Enums;
 using AeroCompliance.Infrastructure.Compliance;
+using AeroCompliance.Infrastructure.Notifications;
 using AeroCompliance.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -44,6 +45,7 @@ public sealed class AnalysisResultConsumer(IConnection connection, IServiceScope
     private async Task HandleAsync(BasicDeliverEventArgs ea, CancellationToken ct)
     {
         var body = ea.Body.ToArray(); using var scope = scopes.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AeroComplianceDbContext>();
+        var notify = scope.ServiceProvider.GetRequiredService<INotificationService>();
         using var doc = JsonDocument.Parse(body); var eventId = doc.RootElement.GetProperty("eventId").GetGuid();
         var strategy = db.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
@@ -56,8 +58,8 @@ public sealed class AnalysisResultConsumer(IConnection connection, IServiceScope
             switch (ea.RoutingKey)
             {
                 case MessagingConstants.AnalysisStartedRoutingKey: await Started(db, JsonSerializer.Deserialize<ImageAnalysisStarted>(body, Json)!, ct); break;
-                case MessagingConstants.AnalysisCompletedRoutingKey: await Completed(db, JsonSerializer.Deserialize<ImageAnalysisCompleted>(body, Json)!, ct); break;
-                case MessagingConstants.AnalysisFailedRoutingKey: await Failed(db, JsonSerializer.Deserialize<ImageAnalysisFailed>(body, Json)!, ct); break;
+                case MessagingConstants.AnalysisCompletedRoutingKey: await Completed(db, notify, JsonSerializer.Deserialize<ImageAnalysisCompleted>(body, Json)!, ct); break;
+                case MessagingConstants.AnalysisFailedRoutingKey: await Failed(db, notify, JsonSerializer.Deserialize<ImageAnalysisFailed>(body, Json)!, ct); break;
                 default: throw new InvalidDataException("Unknown analysis event.");
             }
             inbox.CompletedAt = DateTimeOffset.UtcNow; await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
@@ -73,7 +75,7 @@ public sealed class AnalysisResultConsumer(IConnection connection, IServiceScope
             OutputCrs = "EPSG:4326", Status = "Analyzing", AttemptNumber = e.Attempt, StartedAt = e.StartedAt });
     }
 
-    private static async Task Completed(AeroComplianceDbContext db, ImageAnalysisCompleted e, CancellationToken ct)
+    private static async Task Completed(AeroComplianceDbContext db, INotificationService notify, ImageAnalysisCompleted e, CancellationToken ct)
     {
         var image = await db.Images.Include(x => x.Flight).SingleAsync(x => x.Id == e.ImageId, ct); if (image.ProcessingRequestId != e.RequestId) return;
         var analysis = await db.ImageAnalyses.SingleOrDefaultAsync(x => x.RequestId == e.RequestId, ct) ?? new ImageAnalysis { Id = Guid.NewGuid(), ImageId = e.ImageId, RequestId = e.RequestId };
@@ -93,20 +95,42 @@ public sealed class AnalysisResultConsumer(IConnection connection, IServiceScope
         {
             if (await db.Detections.AnyAsync(x => x.ImageAnalysisId == analysis.Id && x.ExternalDetectionId == item.DetectionId, ct)) continue;
             var geom=GeometryReader.Read(item.Geometry); var detection=new Detection { Id=Guid.NewGuid(),ImageAnalysisId=analysis.Id,ExternalDetectionId=item.DetectionId,ImageId=image.Id,
-                ClassId=item.ClassId,ClassLabel=item.ClassName,Confidence=item.Confidence,Geom=geom,ModelName=e.ModelName,ModelVersion=e.ModelVersion,CreatedAt=e.CompletedAt };
-            db.Detections.Add(detection); await db.SaveChangesAsync(ct); await Evaluate(db, image.Flight.MunicipalityId, analysis, detection, ct);
+                ClassId=item.ClassId,ClassLabel=item.ClassName,Confidence=item.Confidence,Geom=geom,ModelName=e.ModelName,ModelVersion=e.ModelVersion,CreatedAt=e.CompletedAt,
+                Image=image };
+            db.Detections.Add(detection); await db.SaveChangesAsync(ct); await Evaluate(db, notify, image.Flight.MunicipalityId, analysis, detection, ct);
         }
         analysis.Status="Completed";image.ProcessingStatus=ImageProcessingStatus.Completed;image.ProcessingCompletedAt=e.CompletedAt;image.LastErrorCode=null;image.LastErrorMessage=null;
         db.AuditLogs.Add(new AuditLog { Action="image.processing.completed",EntityType="Image",EntityId=image.Id,MunicipalityId=image.Flight.MunicipalityId,
             AfterState=JsonSerializer.Serialize(new{analysisId=analysis.Id,detections=e.Detections.Count}),CreatedAt=DateTimeOffset.UtcNow });
     }
 
-    private static async Task Failed(AeroComplianceDbContext db, ImageAnalysisFailed e, CancellationToken ct)
+    private static async Task Failed(AeroComplianceDbContext db, INotificationService notify, ImageAnalysisFailed e, CancellationToken ct)
     {
-        var image=await db.Images.SingleAsync(x=>x.Id==e.ImageId,ct);if(image.ProcessingRequestId!=e.RequestId)return;
+        var image=await db.Images.Include(x=>x.Flight).SingleAsync(x=>x.Id==e.ImageId,ct);if(image.ProcessingRequestId!=e.RequestId)return;
         image.ProcessingStatus=ImageProcessingStatus.AnalysisFailed;image.ProcessingCompletedAt=e.FailedAt;image.LastErrorCode=e.ErrorCode;image.LastErrorMessage=e.Message[..Math.Min(1000,e.Message.Length)];
         var analysis=await db.ImageAnalyses.SingleOrDefaultAsync(x=>x.RequestId==e.RequestId,ct);if(analysis is not null){analysis.Status="Failed";analysis.CompletedAt=e.FailedAt;analysis.FailureCode=e.ErrorCode;analysis.FailureMessage=image.LastErrorMessage;}
+
+        // Operational alert only: the raw error code and message stay on the image row and never
+        // reach the notification text. Keyed on the processing request, so a redelivered failure
+        // event does not notify anyone a second time.
+        var text = NotificationMessages.ImageProcessingFailed(image.OriginalFileName, image.Flight.MissionName);
+        await notify.NotifyRolesAsync(new NotificationRequest(
+                image.Flight.MunicipalityId,
+                NotificationTypes.ImageProcessingFailed,
+                NotificationSeverities.Critical,
+                text.Title, text.Message,
+                SourceEventKey: e.RequestId.ToString("N"),
+                RelatedEntityType: "Image",
+                RelatedEntityId: image.Id,
+                Route: NotificationRoutes.FlightImages(image.FlightId)),
+            FailureOversightRoles, ct,
+            // The operator who flew the mission is told as well, when that account is still
+            // active in this municipality; otherwise they are simply skipped.
+            alsoNotifyUserId: image.Flight.DroneOperatorId);
     }
+
+    /// <summary>Roles accountable for operational processing failures.</summary>
+    private static readonly string[] FailureOversightRoles = ["Admin", "MunicipalityManager"];
 
     /// <summary>
     /// Phase 7: the deterministic zoning-rule engine runs first. The two original heuristics
@@ -114,11 +138,11 @@ public sealed class AnalysisResultConsumer(IConnection connection, IServiceScope
     /// concern no enforceable rule covered — otherwise a road-setback rule and the road heuristic
     /// would both raise a violation for the same physical encroachment.
     /// </summary>
-    private static async Task Evaluate(AeroComplianceDbContext db, Guid municipalityId, ImageAnalysis analysis, Detection detection, CancellationToken ct)
+    private static async Task Evaluate(AeroComplianceDbContext db, INotificationService notify, Guid municipalityId, ImageAnalysis analysis, Detection detection, CancellationToken ct)
     {
         if (!ComplianceRuleEngine.IsEvaluableClass(detection.ClassLabel)) return;
 
-        var applied = await ComplianceRuleEngine.EvaluateAsync(db, municipalityId, detection, analysis.Id, ct);
+        var applied = await ComplianceRuleEngine.EvaluateAsync(db, municipalityId, detection, analysis.Id, ct, notify);
         await db.SaveChangesAsync(ct);
 
         var covered = applied.Select(x => x.CanonicalKey).ToHashSet();

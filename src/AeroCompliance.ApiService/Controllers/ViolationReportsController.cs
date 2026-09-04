@@ -3,6 +3,7 @@ using AeroCompliance.ApiService.Authorization;
 using AeroCompliance.ApiService.Services;
 using AeroCompliance.Contracts.Dtos.Reports;
 using AeroCompliance.Domain.Entities;
+using AeroCompliance.Infrastructure.Notifications;
 using AeroCompliance.Infrastructure.Persistence;
 using AeroCompliance.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authorization;
@@ -19,7 +20,7 @@ namespace AeroCompliance.ApiService.Controllers;
 [ApiController, Route("api/violations/{violationId:guid}/reports"), Authorize(Policy = Policies.GenerateReports)]
 public sealed class ViolationReportsController(
     AeroComplianceDbContext db, ICurrentUserContext user, IObjectStorage storage, IAuditService audit,
-    ILogger<ViolationReportsController> logger) : ControllerBase
+    INotificationService notify, ILogger<ViolationReportsController> logger) : ControllerBase
 {
     private const string ConfirmedCode = "confirmed_under_notification";
     private const string HumanSource = "human_review";
@@ -101,6 +102,23 @@ public sealed class ViolationReportsController(
                 audit.Add("report.generate", "Report", reportId,
                     after: new { reference, violation = ReportReference.Violation(violationId), source = HumanSource, generatedAt = now },
                     municipalityId: municipalityId);
+
+                // Only the person who asked for the report is told it is ready, and the row and the
+                // notification commit together.
+                if (user.UserId is Guid requester)
+                {
+                    var place = violation.Road?.RoadCode ?? violation.Parcel?.ParcelNumber ?? violation.Zone?.ZoneNumber;
+                    var text = NotificationMessages.ReportGenerated(reference, place);
+                    await notify.NotifyUserAsync(new NotificationRequest(
+                        municipalityId.Value,
+                        NotificationTypes.ReportGenerated,
+                        NotificationSeverities.Information,
+                        text.Title, text.Message,
+                        SourceEventKey: reportId.ToString("N"),
+                        RelatedEntityType: "Report",
+                        RelatedEntityId: reportId,
+                        Route: NotificationRoutes.Report(reportId)), requester, ct);
+                }
                 await db.SaveChangesAsync(ct);
             }
             catch

@@ -10,7 +10,8 @@ import type {
   Zone,
   ZoningRule,
 } from "../api/types";
-import { hasRole, useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/AuthContext";
+import { canEditParcel, canManageGis, canManageMunicipalities, canValidateZoningRule } from "../auth/capabilities";
 import {
   Card,
   Empty,
@@ -91,21 +92,17 @@ export default function Gis() {
       .then(({ data }) => setRuleTypes(data))
       .catch(() => setRuleTypes([]));
   }, []);
-  const selectedRuleType = ruleTypes.find((t) => t.key === form.ruleKey) ?? null;
   const [form, setForm] = useState({
     ...initial,
     municipalityId: user?.municipality?.id || "",
   });
+  const selectedRuleType = ruleTypes.find((t) => t.key === form.ruleKey) ?? null;
   const [editing, setEditing] = useState<string | null>(null);
   const [initialGeometry, setInitialGeometry] = useState<unknown>(null);
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const canManage = hasRole(user, [
-    "Admin",
-    "MunicipalityManager",
-    "GISAnalyst",
-  ]);
+  const canManage = canManageGis(user);
   const load = useCallback(async () => {
     setError("");
     try {
@@ -117,7 +114,7 @@ export default function Gis() {
       setRows(current.items);
       setZones(z.items);
       setBlocks(b.items);
-      if (user?.role.name === "Admin")
+      if (canManageMunicipalities(user))
         setMunicipalities(
           (await getPage<Municipality>("/municipalities", { pageSize: 100 }))
             .items,
@@ -318,7 +315,7 @@ export default function Gis() {
         {show && (
           <form className="form" onSubmit={save} style={{ marginTop: 16 }}>
             <div className="field-row three">
-              {user?.role.name === "Admin" &&
+              {canManageMunicipalities(user) &&
                 ["zones", "roads", "zoning-rules"].includes(tab) && (
                   <label>
                     Municipality
@@ -681,11 +678,7 @@ export default function Gis() {
                             >
                               Details
                             </button>
-                            {canManage &&
-                              !(
-                                tab === "parcels" &&
-                                user?.role.name === "GISAnalyst"
-                              ) && (
+                            {(tab === "parcels" ? canEditParcel(user) : canManage) && (
                                 <button
                                   className="secondary"
                                   onClick={() => void edit(row)}
@@ -696,7 +689,7 @@ export default function Gis() {
                               )}
                             {tab === "zoning-rules" &&
                               !r.isValidated &&
-                              hasRole(user, ["Admin", "GISAnalyst"]) && (
+                              canValidateZoningRule(user) && (
                                 <button
                                   className="secondary"
                                   onClick={() => void validate(String(r.id))}

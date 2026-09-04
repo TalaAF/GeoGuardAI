@@ -9,7 +9,8 @@ import type {
   Mission,
   ViolationSummary,
 } from "../api/types";
-import { hasRole, useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/AuthContext";
+import { canOperateFlights } from "../auth/capabilities";
 import {
   Card,
   Empty,
@@ -95,11 +96,7 @@ export default function FlightDetail() {
     }
   };
   if (!flight && !error) return <Spinner />;
-  const canManage = hasRole(user, [
-    "Admin",
-    "MunicipalityManager",
-    "DroneOperator",
-  ]);
+  const canManage = canOperateFlights(user);
   const transitions: Record<string, string[]> = {
     planned: ["in_progress", "aborted"],
     in_progress: ["completed", "aborted"],

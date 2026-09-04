@@ -7,6 +7,7 @@ using AeroCompliance.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using AeroCompliance.Infrastructure.Notifications;
 using AeroCompliance.Infrastructure.Storage;
 using Microsoft.AspNetCore.Http.Features;
 
@@ -38,6 +39,7 @@ builder.Services.AddAeroComplianceAuthorization();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
 builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddSingleton<IObjectStorage, MinioObjectStorage>();
 builder.Services.AddHostedService<ProcessingOutboxDispatcher>();
 builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit =

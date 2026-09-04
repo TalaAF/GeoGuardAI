@@ -8,7 +8,13 @@ import type {
   Paged,
   UserInfo,
 } from "../api/types";
-import { hasRole, useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/AuthContext";
+import {
+  canChooseFlightOperator,
+  canManageMunicipalities,
+  canManageUsers,
+  canOperateFlights,
+} from "../auth/capabilities";
 import {
   Card,
   Empty,
@@ -44,7 +50,7 @@ export default function Flights() {
       setData(
         await getPage<FlightSummary>("/flights", { page: p, pageSize: 20 }),
       );
-      if (hasRole(user, ["Admin", "MunicipalityManager"]))
+      if (canManageUsers(user))
         setOperators(
           (
             await getPage<UserInfo>("/users", {
@@ -54,7 +60,7 @@ export default function Flights() {
             })
           ).items,
         );
-      if (user?.role.name === "Admin")
+      if (canManageMunicipalities(user))
         setMunicipalities(
           (await getPage<Municipality>("/municipalities", { pageSize: 100 }))
             .items,
@@ -95,11 +101,7 @@ export default function Flights() {
       setBusy(false);
     }
   };
-  const canManage = hasRole(user, [
-    "Admin",
-    "MunicipalityManager",
-    "DroneOperator",
-  ]);
+  const canManage = canOperateFlights(user);
   return (
     <div className="page">
       <PageTitle
@@ -135,7 +137,7 @@ export default function Flights() {
                   }
                 />
               </label>
-              {user?.role.name === "Admin" && (
+              {canManageMunicipalities(user) && (
                 <label>
                   Municipality
                   <select
@@ -158,7 +160,7 @@ export default function Flights() {
                   </select>
                 </label>
               )}
-              {user?.role.name !== "DroneOperator" && (
+              {canChooseFlightOperator(user) && (
                 <label>
                   Drone operator
                   <select

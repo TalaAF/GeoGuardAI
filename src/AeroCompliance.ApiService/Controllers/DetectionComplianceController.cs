@@ -3,6 +3,7 @@ using AeroCompliance.ApiService.Services;
 using AeroCompliance.Contracts.Dtos.Compliance;
 using AeroCompliance.Domain.Entities;
 using AeroCompliance.Infrastructure.Compliance;
+using AeroCompliance.Infrastructure.Notifications;
 using AeroCompliance.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +22,7 @@ namespace AeroCompliance.ApiService.Controllers;
 [ApiController, Route("api/detections/{detectionId:guid}"), Authorize]
 public sealed class DetectionComplianceController(
     AeroComplianceDbContext db, ICurrentUserContext user, IAuditService audit,
-    ILogger<DetectionComplianceController> logger) : ControllerBase
+    INotificationService notify, ILogger<DetectionComplianceController> logger) : ControllerBase
 {
     [HttpGet("compliance-evaluations")]
     public async Task<ActionResult<IReadOnlyList<ComplianceEvaluationDto>>> List(Guid detectionId, CancellationToken ct)
@@ -61,7 +62,7 @@ public sealed class DetectionComplianceController(
             applied = await strategy.ExecuteAsync(async () =>
             {
                 await using var tx = await db.Database.BeginTransactionAsync(ct);
-                var outcome = await ComplianceRuleEngine.EvaluateAsync(db, municipalityId.Value, detection, detection.ImageAnalysisId, ct);
+                var outcome = await ComplianceRuleEngine.EvaluateAsync(db, municipalityId.Value, detection, detection.ImageAnalysisId, ct, notify);
                 await db.SaveChangesAsync(ct);
                 await tx.CommitAsync(ct);
                 return outcome;

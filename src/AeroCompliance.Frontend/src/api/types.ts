@@ -454,3 +454,30 @@ export interface ReEvaluationResult {
   summary: string;
   evaluations: ComplianceEvaluation[];
 }
+
+// --- Phase 8: in-app notifications ------------------------------------------
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  severity: "Information" | "Attention" | "Critical";
+  severityLabel: string;
+  isRead: boolean;
+  createdAtUtc: string;
+  route: string | null;
+  relatedLabel: string | null;
+  actionLabel: string;
+}
+export interface UnreadCount {
+  unreadCount: number;
+}
+export interface MarkAllReadResult {
+  updated: number;
+}
+export interface NotificationPreferences {
+  candidateViolations: boolean;
+  processingFailures: boolean;
+  reviewOutcomes: boolean;
+  generatedReports: boolean;
+  lockedCategories: string[];
+}

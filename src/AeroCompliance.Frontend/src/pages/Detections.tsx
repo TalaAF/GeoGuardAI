@@ -19,7 +19,8 @@ import {
 } from "../components/Common";
 import GeoMap from "../components/GeoMap";
 import ComplianceResults from "../components/ComplianceResults";
-import { hasRole, useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/AuthContext";
+import { canReevaluateCompliance } from "../auth/capabilities";
 import { shortRef } from "../lib/labels";
 
 export default function Detections() {
@@ -31,7 +32,7 @@ export default function Detections() {
   const [error, setError] = useState("");
   const { user } = useAuth();
   // Mirrors the backend ManageGis policy that guards the re-evaluation endpoint.
-  const canReevaluate = hasRole(user, ["Admin", "MunicipalityManager", "GISAnalyst"]);
+  const canReevaluate = canReevaluateCompliance(user);
   const [evaluations, setEvaluations] = useState<ComplianceEvaluation[]>([]);
   const [evalLoading, setEvalLoading] = useState(false);
   const [evalBusy, setEvalBusy] = useState(false);

@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Shield, LogIn } from "lucide-react";
 import { errorMessage } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { homeRouteFor } from "../auth/capabilities";
 
 export default function Login() {
   const { user, login } = useAuth();
@@ -12,16 +13,18 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to={homeRouteFor(user)} replace />;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await login(email, password);
-      navigate((location.state as { from?: string })?.from || "/dashboard", {
-        replace: true,
-      });
+      const signedInUser = await login(email, password);
+      // A deep link captured before login (e.g. a stale notification URL) is honored here, but
+      // RequireCapability still re-checks it on arrival — so an unauthorized "from" target simply
+      // redirects again to the signed-in user's own home page rather than ever rendering.
+      const from = (location.state as { from?: string })?.from;
+      navigate(from || homeRouteFor(signedInUser), { replace: true });
     } catch (err) {
       setError(errorMessage(err));
     } finally {

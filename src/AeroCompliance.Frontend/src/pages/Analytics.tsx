@@ -24,6 +24,7 @@ import type {
   Municipality,
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { canOverrideAnalyticsMunicipality } from "../auth/capabilities";
 import { Card, Empty, Notice, PageTitle, Spinner } from "../components/Common";
 
 type PresetKey = "7" | "30" | "90" | "custom";
@@ -79,7 +80,7 @@ function duration(seconds: number | null) {
 
 export default function Analytics() {
   const { user } = useAuth();
-  const isAdmin = user?.role.name === "Admin";
+  const isAdmin = canOverrideAnalyticsMunicipality(user);
   const [preset, setPreset] = useState<PresetKey>("30");
   const [customFrom, setCustomFrom] = useState(isoDay(daysAgo(29)));
   const [customTo, setCustomTo] = useState(isoDay(new Date()));

@@ -1,4 +1,5 @@
 using AeroCompliance.Domain.Entities;
+using AeroCompliance.Infrastructure.Notifications;
 using AeroCompliance.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -40,6 +41,12 @@ public sealed record DetectionContext(
 /// </remarks>
 public static class ComplianceRuleEngine
 {
+    /// <summary>
+    /// Who needs to know a new candidate violation is waiting. DroneOperator and GISAnalyst are
+    /// deliberately excluded: neither reviews violations.
+    /// </summary>
+    private static readonly string[] ReviewRecipientRoles = ["Admin", "MunicipalityManager", "Inspector", "Reviewer"];
+
     /// <summary>Only these detection classes represent built structures worth evaluating.</summary>
     private static readonly string[] EvaluableClasses = ["building", "violation"];
 
@@ -52,7 +59,7 @@ public static class ComplianceRuleEngine
     /// </summary>
     public static async Task<IReadOnlyList<RuleEvaluationResult>> EvaluateAsync(
         AeroComplianceDbContext db, Guid municipalityId, Detection detection, Guid? imageAnalysisId,
-        CancellationToken ct)
+        CancellationToken ct, INotificationService? notifications = null)
     {
         var results = new List<RuleEvaluationResult>();
         if (!IsEvaluableClass(detection.ClassLabel) || detection.Geom is null || detection.Geom.IsEmpty)
@@ -153,6 +160,30 @@ public static class ComplianceRuleEngine
                 });
                 violationId = violation.Id;
                 created = true;
+
+                // Staged, not saved: the notification commits with the violation, so a rolled-back
+                // evaluation can never leave users notified about a violation that does not exist.
+                if (notifications is not null)
+                {
+                    var text = NotificationMessages.CandidateViolation(
+                        definition.Label,
+                        measurement.Value is decimal mv ? definition.Format(mv) : null,
+                        definition.Format(required),
+                        location,
+                        detection.Image?.Flight?.MissionName);
+                    await notifications.NotifyRolesAsync(new NotificationRequest(
+                            municipalityId,
+                            NotificationTypes.CandidateViolationCreated,
+                            NotificationSeverities.Attention,
+                            text.Title, text.Message,
+                            // Keyed on the violation, so a replay or re-evaluation of the same
+                            // detection never notifies anyone twice.
+                            SourceEventKey: violation.Id.ToString("N"),
+                            RelatedEntityType: "Violation",
+                            RelatedEntityId: violation.Id,
+                            Route: NotificationRoutes.Violation(violation.Id)),
+                        ReviewRecipientRoles, ct);
+                }
             }
 
             results.Add(new RuleEvaluationResult(definition.CanonicalKey, definition.Label, rule.Id,

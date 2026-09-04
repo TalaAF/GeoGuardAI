@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, errorMessage, page as getPage } from "../api/client";
 import type { Municipality, Role, UserInfo } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { canManageMunicipalities } from "../auth/capabilities";
 import {
   Card,
   Empty,
@@ -50,7 +51,7 @@ export default function Administration() {
     setError("");
     try {
       setUsers((await getPage<UserInfo>("/users", { pageSize: 100 })).items);
-      if (user?.role.name === "Admin")
+      if (canManageMunicipalities(user))
         setMunicipalities(
           (await getPage<Municipality>("/municipalities", { pageSize: 100 }))
             .items,
@@ -179,7 +180,7 @@ export default function Administration() {
           >
             Users
           </button>
-          {user?.role.name === "Admin" && (
+          {canManageMunicipalities(user) && (
             <button
               className={tab === "municipalities" ? "active" : ""}
               onClick={() => {
@@ -241,13 +242,13 @@ export default function Administration() {
                   }
                 >
                   {roles
-                    .filter((x) => user?.role.name === "Admin" || x !== "Admin")
+                    .filter((x) => canManageMunicipalities(user) || x !== "Admin")
                     .map((x) => (
                       <option key={x}>{x}</option>
                     ))}
                 </select>
               </label>
-              {user?.role.name === "Admin" && userForm.role !== "Admin" && (
+              {canManageMunicipalities(user) && userForm.role !== "Admin" && (
                 <label>
                   Municipality
                   <select
