@@ -1,7 +1,12 @@
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api, errorMessage, page as getPage } from "../api/client";
-import type { Detection, Paged } from "../api/types";
+import type {
+  ComplianceEvaluation,
+  Detection,
+  Paged,
+  ReEvaluationResult,
+} from "../api/types";
 import {
   Card,
   Empty,
@@ -13,6 +18,8 @@ import {
   fmtPercent,
 } from "../components/Common";
 import GeoMap from "../components/GeoMap";
+import ComplianceResults from "../components/ComplianceResults";
+import { hasRole, useAuth } from "../auth/AuthContext";
 import { shortRef } from "../lib/labels";
 
 export default function Detections() {
@@ -22,6 +29,57 @@ export default function Detections() {
   const [className, setClass] = useState("");
   const [confidence, setConfidence] = useState("");
   const [error, setError] = useState("");
+  const { user } = useAuth();
+  // Mirrors the backend ManageGis policy that guards the re-evaluation endpoint.
+  const canReevaluate = hasRole(user, ["Admin", "MunicipalityManager", "GISAnalyst"]);
+  const [evaluations, setEvaluations] = useState<ComplianceEvaluation[]>([]);
+  const [evalLoading, setEvalLoading] = useState(false);
+  const [evalBusy, setEvalBusy] = useState(false);
+  const [evalMessage, setEvalMessage] = useState("");
+
+  // Compliance results are fetched per selected detection rather than with the list, so opening
+  // the page stays cheap when nothing is selected.
+  useEffect(() => {
+    if (!selected) {
+      setEvaluations([]);
+      setEvalMessage("");
+      return;
+    }
+    let cancelled = false;
+    setEvalLoading(true);
+    setEvalMessage("");
+    api
+      .get<ComplianceEvaluation[]>(`/detections/${selected.id}/compliance-evaluations`)
+      .then(({ data }) => {
+        if (!cancelled) setEvaluations(data);
+      })
+      .catch(() => {
+        if (!cancelled) setEvaluations([]);
+      })
+      .finally(() => {
+        if (!cancelled) setEvalLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected]);
+
+  const reevaluate = async () => {
+    if (!selected || evalBusy) return; // guards a double click
+    setEvalBusy(true);
+    setError("");
+    try {
+      const { data } = await api.post<ReEvaluationResult>(
+        `/detections/${selected.id}/evaluate-compliance`,
+      );
+      setEvaluations(data.evaluations);
+      setEvalMessage(data.summary);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setEvalBusy(false);
+    }
+  };
   const load = useCallback(async () => {
     try {
       setData(
@@ -194,6 +252,14 @@ export default function Detections() {
                   </div>
                 </details>
               )}
+              <ComplianceResults
+                items={evaluations}
+                loading={evalLoading}
+                canReevaluate={canReevaluate}
+                onReevaluate={() => void reevaluate()}
+                busy={evalBusy}
+                message={evalMessage}
+              />
             </div>
           )}
         </Card>

@@ -10,8 +10,9 @@ using Microsoft.OpenApi;
 using AeroCompliance.Infrastructure.Storage;
 using Microsoft.AspNetCore.Http.Features;
 
-// QuestPDF Community License (free for individuals, non-profits and organisations under $1M
-// annual revenue). Declared once at startup, before any report is rendered.
+// QuestPDF is source-available under the Community License (NOT MIT); its free tier is
+// eligibility-based and must be re-checked before any production municipal deployment.
+// Declared once at startup, before any report is rendered.
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);

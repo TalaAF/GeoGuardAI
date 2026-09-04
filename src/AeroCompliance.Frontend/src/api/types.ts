@@ -272,6 +272,12 @@ export interface ZoningRule {
   validatedAt: string | null;
   isActive: boolean;
   createdAt: string;
+  // Phase 7: resolved server-side from the rule catalogue.
+  ruleLabel?: string | null;
+  ruleDescription?: string | null;
+  enforcementState?: string | null;
+  requirementDisplay?: string | null;
+  isSupported?: boolean;
 }
 
 // --- Phase 6: analytics -----------------------------------------------------
@@ -396,4 +402,55 @@ export interface ReportDetails {
   signedOffByName: string | null;
   signedOffAt: string | null;
   downloadAvailable: boolean;
+}
+
+// --- Phase 7: zoning rule catalogue and compliance results ------------------
+export interface RuleType {
+  key: string;
+  label: string;
+  description: string;
+  unit: string;
+  unitLabel: string;
+  minimumValue: number;
+  maximumValue: number;
+  comparisonLabel: string;
+  calculationSummary: string;
+  requiredContext: string;
+  exampleValue: string;
+}
+export interface ComplianceEvaluation {
+  id: string;
+  detectionId: string;
+  evaluationType: string;
+  ruleLabel: string;
+  ruleDescription: string | null;
+  zoningRuleId: string | null;
+  ruleEnforcementState: string | null;
+  zoneNumber: string | null;
+  zoneName: string | null;
+  blockNumber: string | null;
+  parcelNumber: string | null;
+  roadCode: string | null;
+  roadName: string | null;
+  measuredValue: number | null;
+  measuredDisplay: string | null;
+  requiredValue: number | null;
+  requiredDisplay: string | null;
+  unit: string;
+  outcome: string;
+  outcomeLabel: string;
+  explanation: string;
+  metricCrs: number;
+  violationId: string | null;
+  evaluatedAt: string;
+}
+export interface ReEvaluationResult {
+  detectionId: string;
+  rulesEvaluated: number;
+  passed: number;
+  failed: number;
+  notAssessed: number;
+  violationsCreated: number;
+  summary: string;
+  evaluations: ComplianceEvaluation[];
 }

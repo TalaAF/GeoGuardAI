@@ -68,9 +68,6 @@ Inspector) can move it to `confirmed_under_notification` or `dismissed`.
   real model has been verified or handed off.**
 - **Pixel → geographic coordinate conversion** for raster imagery (`geospatial.py` only contains a
   guard that raises if CRS/affine transform are missing — no actual conversion is implemented).
-- **Zoning-rule engine** — `ZoningRule` has full CRUD and a `validate` action, but the compliance
-  evaluator (`AnalysisResultConsumer.Evaluate`) does not read zoning rules at all; it only checks
-  raw road/parcel geometry intersection. `RuleId` on a `Violation` is always `null` today.
 - **Notifications** — the `notifications` table and `Notification` entity exist; no controller, no
   delivery logic.
 - **Police alerts** — the `police_alerts` table and `PoliceAlert` entity exist; no controller, no
@@ -514,6 +511,93 @@ Detections** and **Violation** detail pages similarly never show detection/analy
 geometry payload — only a short support reference (e.g. "Detection ADDE8257"), human field values,
 and the geometry rendered on a map.
 
+## 7b. Zoning-rule engine (Phase 7)
+
+Validated zoning rules are executed as a small deterministic compliance engine
+([`ComplianceRuleEngine`](src/AeroCompliance.Infrastructure/Compliance/ComplianceRuleEngine.cs) and
+[`ZoningRuleCatalog`](src/AeroCompliance.Infrastructure/Compliance/ZoningRuleCatalog.cs), in
+`AeroCompliance.Infrastructure` so the processing pipeline and the API share one implementation).
+
+### Supported rule types
+
+The catalogue is **closed** — there is no expression language, and a rule key outside this list is
+stored and displayed but never evaluated, so an unrecognised or AI-invented rule can never produce
+a violation.
+
+| Canonical key | Label | Unit | Comparison | Needs |
+|---|---|---|---|---|
+| `minimum_road_setback_m` | Minimum distance from road | `m` | must be at least | a mapped road |
+| `maximum_building_area_m2` | Maximum building area | `m2` | must not exceed | — |
+| `maximum_parcel_coverage_percent` | Maximum parcel coverage | `percent` | must not exceed | a mapped parcel |
+| `maximum_outside_parcel_area_m2` | Maximum area outside the parcel | `m2` | must not exceed | a mapped parcel |
+
+Legacy/development keys (`setback_from_road`, `road_setback`, `max_coverage`, `parcel_overflow`, …)
+are normalised to the canonical key on read and rewritten to canonical form on save. Manual
+creation or editing rejects an unsupported key, a wrong unit, or an out-of-range value with a
+specific message.
+
+### Enforceability
+
+A rule is applied only when it is **supported, validly configured, active, human-validated**, and in
+the detection's own municipality. The state shown in the UI and returned by the API is one of:
+
+`Enforced` · `Awaiting validation` · `Inactive` · `Unsupported` · `Invalid configuration`
+
+AI-extracted rules stay visible but cannot affect compliance until a person validates them. Editing
+a rule resets it to *awaiting validation*.
+
+### Applicability and precedence
+
+For each detection the engine resolves the **primary parcel** (largest polygon intersection), then
+its block and zone; if no parcel matches it falls back to the zone the detection sits in. Rules are
+then matched on the exact zone or on the zone type. Within one canonical rule type a **zone-specific
+rule wins over a zone-type fallback**, so the specific and generic versions of the same rule are
+never both applied. Missing spatial context yields a safe `not_applicable` / `insufficient_data`
+outcome rather than failing the rule or the image-processing pipeline.
+
+### Calculations
+
+Geometry is stored and returned as EPSG:4326 throughout; every distance and area is computed after
+an explicit transform to **EPSG:32636**, recorded on the evaluation as `metric_crs`. Detection and
+boundary polygons are passed through `ST_MakeValid` so a slightly malformed ring is repaired rather
+than aborting the query — no geometry is invented. A building that touches or overlaps the road
+measures a setback of exactly zero.
+
+### Persistence and idempotency
+
+One `ComplianceEvaluation` exists per (detection, evaluation type) — already enforced by a unique
+index, and sufficient because precedence guarantees at most one rule per canonical type applies.
+Re-running the engine updates the measurement in place instead of inserting a duplicate. **The
+required value is captured at first evaluation and never rewritten**, so later edits to a rule
+cannot silently restate what an already-reviewed violation was judged against.
+
+A passing rule records an evaluation and no violation. A failing rule raises **at most one**
+candidate violation (status `under_review` — never auto-confirmed) linked to the detection, rule,
+zone, block, and the parcel or road the rule measured against.
+
+### Relationship to the original heuristics
+
+The two pre-Phase-7 checks (any road overlap, any spill outside the parcel) are kept as a
+**fallback for the concern no enforceable rule covered**. When a road-setback rule applies, the road
+heuristic is skipped so one physical encroachment cannot raise two violations; the parcel heuristic
+behaves the same way against the parcel-scoped rules. With no rules configured, behaviour is
+unchanged from Phase 6.
+
+### Endpoints
+
+| Method & path | Policy | Purpose |
+|---|---|---|
+| `GET /api/zoning-rules/types` | authenticated | The closed catalogue that drives the guided rule form |
+| `GET /api/detections/{id}/compliance-evaluations` | authenticated (tenant-scoped) | Human-readable compliance results for a detection |
+| `POST /api/detections/{id}/evaluate-compliance` | `ManageGis` | Re-run the engine; idempotent, audited, never alters a reviewed violation |
+
+### Demonstration data
+
+The development database carries one clearly-labelled demo rule — **minimum road setback of 3 m on
+zone `RML-Z01`**, active and validated, with `source_document` set to
+*"Development demonstration data - not an official Ramallah municipal regulation."* It exists to
+demonstrate the engine and **does not represent any actual Ramallah municipal regulation.**
+
 ## 8. Database model
 
 PostgreSQL + PostGIS via EF Core migrations under
@@ -815,10 +899,18 @@ violation references (`AC-2026-…`, `VIO-…`) are derived deterministically fr
 so no schema change was needed and the same record always renders the same reference in the API,
 the PDF and the UI. Cross-tenant and unknown ids are indistinguishable: both return `404`.
 
-**PDF.** Rendered with [QuestPDF](https://www.questpdf.com/) (Community License — MIT text, free for
-individuals, non-profits and organisations under $1M annual revenue), chosen because it is pure
-managed .NET and bundles its own text shaping, so output does not depend on fonts installed on the
-host and no browser, headless Chromium or external tool is involved. The document is English-only in
+**PDF.** Rendered with [QuestPDF](https://www.questpdf.com/), chosen because it is pure managed
+.NET and bundles its own text shaping, so output does not depend on fonts installed on the host and
+no browser, headless Chromium or external tool is involved.
+
+> **Licensing — QuestPDF is not MIT-licensed.** It is *source-available* under the
+> [QuestPDF Community License](https://www.questpdf.com/license/community.html), whose free tier is
+> **eligibility-based** (assessed against organisation revenue/size, per the
+> [licensing guide](https://www.questpdf.com/license/guide.html)) rather than an open-source grant.
+> Current academic/development use in this repository must be checked against those eligibility
+> terms, and **a production municipal or government deployment requires a deliberate licensing
+> decision — either purchasing a commercial licence or replacing the library.** This is an
+> outstanding decision, not a resolved one. The document is English-only in
 this MVP and contains: municipality, report reference, generation date and current status; the
 violation summary (type, detection class, AI confidence, flight mission, source image filename);
 location (road, parcel, zone, block, and an approximate centre as latitude/longitude — never raw
@@ -1275,8 +1367,6 @@ production use:
   and verified inside the actual raster/YOLO-capable Docker image against a synthetic georeferenced
   GeoTIFF (see the AI Worker README) — but `YoloModelRunner`'s own inference call has never run
   against a real model or a real drone GeoTIFF.
-- A zoning-rule engine that the compliance evaluator actually consults (`RuleId` is currently always
-  `null`).
 - Official municipality GIS import (current data is CRUD-entered demo data).
 - Notifications and police alerts — schema exists, no logic.
 - All of §24's security/production hardening items.

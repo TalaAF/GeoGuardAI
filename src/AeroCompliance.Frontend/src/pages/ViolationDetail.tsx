@@ -9,7 +9,12 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, errorMessage } from "../api/client";
-import type { Detection, ReportSummary, ViolationDetails } from "../api/types";
+import type {
+  ComplianceEvaluation,
+  Detection,
+  ReportSummary,
+  ViolationDetails,
+} from "../api/types";
 import { hasRole, useAuth } from "../auth/AuthContext";
 import {
   Card,
@@ -23,6 +28,7 @@ import {
 import GeoMap, { type FeatureKind } from "../components/GeoMap";
 import { humanizeCode, shortRef } from "../lib/labels";
 import { downloadReport } from "../lib/reports";
+import ComplianceResults from "../components/ComplianceResults";
 
 // Reports are only meaningful once a human has confirmed the violation; this mirrors the
 // backend rule rather than replacing it (the API rejects anything else with a 409).
@@ -49,6 +55,7 @@ export default function ViolationDetail() {
   const [message, setMessage] = useState("");
   const [report, setReport] = useState<ReportSummary | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
+  const [evaluations, setEvaluations] = useState<ComplianceEvaluation[]>([]);
   const load = useCallback(async () => {
     if (!id) return;
     setError("");
@@ -56,6 +63,18 @@ export default function ViolationDetail() {
       const violation = (await api.get<ViolationDetails>(`/violations/${id}`)).data;
       setData(violation);
       setDetection((await api.get<Detection>(`/detections/${violation.detectionId}`)).data);
+      // The rule comparison that produced this violation. A failure here must not hide the case.
+      try {
+        setEvaluations(
+          (
+            await api.get<ComplianceEvaluation[]>(
+              `/detections/${violation.detectionId}/compliance-evaluations`,
+            )
+          ).data,
+        );
+      } catch {
+        setEvaluations([]);
+      }
       // Surface an already-generated report so the action reads "Download" rather than
       // silently regenerating. A failure here must not block the violation itself.
       if (violation.status === CONFIRMED_STATUS) {
@@ -267,6 +286,11 @@ export default function ViolationDetail() {
                 </div>
               </div>
             </Card>
+            {evaluations.length > 0 && (
+              <Card>
+                <ComplianceResults items={evaluations} />
+              </Card>
+            )}
           </div>
           <div className="grid">
             <Card>

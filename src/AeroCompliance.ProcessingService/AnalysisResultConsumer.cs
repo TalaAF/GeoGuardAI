@@ -5,6 +5,7 @@ using AeroCompliance.Contracts.Messaging;
 using AeroCompliance.Contracts.Messaging.Messages;
 using AeroCompliance.Domain.Entities;
 using AeroCompliance.Domain.Enums;
+using AeroCompliance.Infrastructure.Compliance;
 using AeroCompliance.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -107,15 +108,37 @@ public sealed class AnalysisResultConsumer(IConnection connection, IServiceScope
         var analysis=await db.ImageAnalyses.SingleOrDefaultAsync(x=>x.RequestId==e.RequestId,ct);if(analysis is not null){analysis.Status="Failed";analysis.CompletedAt=e.FailedAt;analysis.FailureCode=e.ErrorCode;analysis.FailureMessage=image.LastErrorMessage;}
     }
 
+    /// <summary>
+    /// Phase 7: the deterministic zoning-rule engine runs first. The two original heuristics
+    /// (any road overlap, any spill outside the parcel) are kept only as a fallback for the
+    /// concern no enforceable rule covered — otherwise a road-setback rule and the road heuristic
+    /// would both raise a violation for the same physical encroachment.
+    /// </summary>
     private static async Task Evaluate(AeroComplianceDbContext db, Guid municipalityId, ImageAnalysis analysis, Detection detection, CancellationToken ct)
     {
-        if (detection.ClassLabel is not ("building" or "violation")) return;
+        if (!ComplianceRuleEngine.IsEvaluableClass(detection.ClassLabel)) return;
+
+        var applied = await ComplianceRuleEngine.EvaluateAsync(db, municipalityId, detection, analysis.Id, ct);
+        await db.SaveChangesAsync(ct);
+
+        var covered = applied.Select(x => x.CanonicalKey).ToHashSet();
+        var roadCovered = covered.Contains(ZoningRuleCatalog.MinimumRoadSetback);
+        var parcelCovered = covered.Contains(ZoningRuleCatalog.MaximumOutsideParcelArea) ||
+                            covered.Contains(ZoningRuleCatalog.MaximumParcelCoverage);
+
         var conn=(NpgsqlConnection)db.Database.GetDbConnection();
-        var road=await SpatialHit(conn,"SELECT id, ST_Area(ST_Intersection(ST_Transform(geom,32636),ST_Transform(@g,32636))) FROM roads WHERE municipality_id=@m AND ST_Intersects(geom,@g) ORDER BY 2 DESC LIMIT 1",municipalityId,detection.Geom,ct);
-        if(road is not null){await AddViolation(db,analysis,detection,"road_encroachment",road.Value.Id,null,null,road.Value.Value,ct);return;}
-        var parcel=await SpatialHit(conn,"SELECT p.id, ST_Area(ST_Difference(ST_Transform(@g,32636),ST_Transform(p.geom,32636))) FROM parcels p JOIN blocks b ON p.block_id=b.id JOIN zones z ON b.zone_id=z.id WHERE z.municipality_id=@m AND ST_Intersects(p.geom,@g) ORDER BY ST_Area(ST_Intersection(ST_Transform(p.geom,32636),ST_Transform(@g,32636))) DESC LIMIT 1",municipalityId,detection.Geom,ct);
-        if(parcel is not null&&parcel.Value.Value>0.01m)await AddViolation(db,analysis,detection,"parcel_encroachment",null,parcel.Value.Id,null,parcel.Value.Value,ct);
+        if (!roadCovered)
+        {
+            var road=await SpatialHit(conn,"SELECT id, ST_Area(ST_Intersection(ST_Transform(geom,32636),ST_Transform(@g,32636))) FROM roads WHERE municipality_id=@m AND ST_Intersects(geom,@g) ORDER BY 2 DESC LIMIT 1",municipalityId,detection.Geom,ct);
+            if(road is not null){await AddViolation(db,analysis,detection,"road_encroachment",road.Value.Id,null,null,road.Value.Value,ct);return;}
+        }
+        if (!parcelCovered)
+        {
+            var parcel=await SpatialHit(conn,"SELECT p.id, ST_Area(ST_Difference(ST_Transform(@g,32636),ST_Transform(p.geom,32636))) FROM parcels p JOIN blocks b ON p.block_id=b.id JOIN zones z ON b.zone_id=z.id WHERE z.municipality_id=@m AND ST_Intersects(p.geom,@g) ORDER BY ST_Area(ST_Intersection(ST_Transform(p.geom,32636),ST_Transform(@g,32636))) DESC LIMIT 1",municipalityId,detection.Geom,ct);
+            if(parcel is not null&&parcel.Value.Value>0.01m)await AddViolation(db,analysis,detection,"parcel_encroachment",null,parcel.Value.Id,null,parcel.Value.Value,ct);
+        }
     }
+
     private static async Task<(Guid Id,decimal Value)?> SpatialHit(NpgsqlConnection conn,string sql,Guid municipalityId,NetTopologySuite.Geometries.MultiPolygon geom,CancellationToken ct){await using var cmd=new NpgsqlCommand(sql,conn);cmd.Parameters.AddWithValue("m",municipalityId);cmd.Parameters.AddWithValue("g",NpgsqlDbType.Geometry,geom);await using var reader=await cmd.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct))return null;return(reader.GetGuid(0),reader.IsDBNull(1)?0:Convert.ToDecimal(reader.GetDouble(1)));}
     private static async Task AddViolation(AeroComplianceDbContext db,ImageAnalysis analysis,Detection detection,string type,Guid? roadId,Guid? parcelId,Guid? ruleId,decimal measured,CancellationToken ct){if(await db.ComplianceEvaluations.AnyAsync(x=>x.DetectionId==detection.Id&&x.EvaluationType==type,ct))return;var evaluation=new ComplianceEvaluation{Id=Guid.NewGuid(),ImageAnalysisId=analysis.Id,DetectionId=detection.Id,ZoningRuleId=ruleId,EvaluationType=type,MeasuredValue=measured,Unit="m2",Outcome="candidate_violation",MetricCrs=32636,CreatedAt=DateTimeOffset.UtcNow};db.ComplianceEvaluations.Add(evaluation);var violation=new Violation{Id=Guid.NewGuid(),ComplianceEvaluationId=evaluation.Id,DetectionId=detection.Id,ParcelId=parcelId,RoadId=roadId,RuleId=ruleId,ViolationType=type,ExceedanceAreaM2=measured,AiConfidenceScore=detection.Confidence,CurrentStatusId=1,Geom=detection.Geom,CreatedAt=DateTimeOffset.UtcNow,UpdatedAt=DateTimeOffset.UtcNow};db.Violations.Add(violation);db.ViolationStatusHistory.Add(new ViolationStatusHistory{Id=Guid.NewGuid(),ViolationId=violation.Id,StatusId=1,Notes="Created by automated compliance evaluation.",ChangedAt=DateTimeOffset.UtcNow});}
 }

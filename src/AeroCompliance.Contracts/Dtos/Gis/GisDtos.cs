@@ -52,7 +52,10 @@ public sealed class SaveRoadRequest
 
 public sealed record ZoningRuleDto(Guid Id, Guid MunicipalityId, Guid? ZoneId, string? ZoneNumber, string? ZoneType, string RuleKey, decimal RuleValue,
     string Unit, string? SourceDocument, bool ExtractedByAi, bool IsValidated, Guid? ValidatedBy, string? ValidatorName,
-    DateTimeOffset? ValidatedAt, bool IsActive, DateTimeOffset CreatedAt);
+    DateTimeOffset? ValidatedAt, bool IsActive, DateTimeOffset CreatedAt,
+    // Phase 7: resolved server-side from the rule catalogue so the UI never interprets a rule key.
+    string? RuleLabel = null, string? RuleDescription = null, string? EnforcementState = null,
+    string? RequirementDisplay = null, bool IsSupported = false);
 public sealed class SaveZoningRuleRequest
 {
     public Guid? MunicipalityId { get; init; }

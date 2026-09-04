@@ -6,6 +6,7 @@ import type {
   Municipality,
   Parcel,
   Road,
+  RuleType,
   Zone,
   ZoningRule,
 } from "../api/types";
@@ -20,6 +21,7 @@ import {
 } from "../components/Common";
 import GeometryEditor from "../components/GeometryEditor";
 import GeoMap from "../components/GeoMap";
+import { EnforcementBadge } from "../components/ComplianceResults";
 import { formatArea, totalAreaM2, type NormalizedMultiPolygon } from "../lib/geometry";
 
 type Tab = "zones" | "blocks" | "parcels" | "roads" | "zoning-rules";
@@ -80,6 +82,16 @@ export default function Gis() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
+  const [ruleTypes, setRuleTypes] = useState<RuleType[]>([]);
+  // The guided rule form is driven entirely by the backend catalogue, so the unit, limits and
+  // help text can never drift from what the engine actually enforces.
+  useEffect(() => {
+    api
+      .get<RuleType[]>("/zoning-rules/types")
+      .then(({ data }) => setRuleTypes(data))
+      .catch(() => setRuleTypes([]));
+  }, []);
+  const selectedRuleType = ruleTypes.find((t) => t.key === form.ruleKey) ?? null;
   const [form, setForm] = useState({
     ...initial,
     municipalityId: user?.municipality?.id || "",
@@ -511,66 +523,104 @@ export default function Gis() {
               )}
               {tab === "zoning-rules" && (
                 <>
-                  <label>
-                    Zone (or use zone type)
+                  <label className="span-2">
+                    Rule type
                     <select
-                      value={form.zoneId}
-                      onChange={(e) =>
-                        setForm({ ...form, zoneId: e.target.value })
-                      }
+                      required
+                      value={form.ruleKey}
+                      onChange={(e) => {
+                        const picked = ruleTypes.find((t) => t.key === e.target.value);
+                        setForm({
+                          ...form,
+                          ruleKey: e.target.value,
+                          // The unit is a property of the rule type, never typed by hand.
+                          unit: picked?.unit ?? "",
+                        });
+                      }}
                     >
-                      <option value="">No specific zone</option>
-                      {zones.map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {x.zoneNumber}
+                      <option value="">Select a rule type…</option>
+                      {ruleTypes.map((t) => (
+                        <option key={t.key} value={t.key}>
+                          {t.label}
                         </option>
                       ))}
                     </select>
+                    {selectedRuleType && (
+                      <small className="field-help">{selectedRuleType.description}</small>
+                    )}
+                  </label>
+                  <label>
+                    {selectedRuleType
+                      ? `${selectedRuleType.comparisonLabel} (${selectedRuleType.unitLabel})`
+                      : "Required value"}
+                    <input
+                      required
+                      type="number"
+                      step="any"
+                      min={selectedRuleType?.minimumValue}
+                      max={selectedRuleType?.maximumValue}
+                      disabled={!selectedRuleType}
+                      placeholder={selectedRuleType?.exampleValue}
+                      value={form.ruleValue}
+                      onChange={(e) => setForm({ ...form, ruleValue: e.target.value })}
+                    />
+                    {selectedRuleType && (
+                      <small className="field-help">
+                        Between {selectedRuleType.minimumValue} and{" "}
+                        {selectedRuleType.maximumValue} {selectedRuleType.unitLabel}.
+                      </small>
+                    )}
+                  </label>
+                  <label>
+                    Unit
+                    <input
+                      readOnly
+                      value={selectedRuleType?.unitLabel ?? "Select a rule type first"}
+                    />
+                    <small className="field-help">Set automatically by the rule type.</small>
+                  </label>
+                  <label>
+                    Applies to zone
+                    <select
+                      value={form.zoneId}
+                      onChange={(e) => setForm({ ...form, zoneId: e.target.value })}
+                    >
+                      <option value="">All zones of a type (below)</option>
+                      {zones.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.zoneNumber}
+                          {x.name ? ` — ${x.name}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <small className="field-help">
+                      A rule for a specific zone takes precedence over a zone-type rule.
+                    </small>
                   </label>
                   {!form.zoneId && (
                     <label>
                       Zone type
                       <input
                         required
+                        placeholder="residential"
                         value={form.zoneType}
-                        onChange={(e) =>
-                          setForm({ ...form, zoneType: e.target.value })
-                        }
+                        onChange={(e) => setForm({ ...form, zoneType: e.target.value })}
                       />
                     </label>
                   )}
-                  <label>
-                    Rule key
-                    <input
-                      required
-                      value={form.ruleKey}
-                      onChange={(e) =>
-                        setForm({ ...form, ruleKey: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Value
-                    <input
-                      required
-                      type="number"
-                      step="any"
-                      value={form.ruleValue}
-                      onChange={(e) =>
-                        setForm({ ...form, ruleValue: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Unit
-                    <input
-                      required
-                      value={form.unit}
-                      onChange={(e) =>
-                        setForm({ ...form, unit: e.target.value })
-                      }
-                    />
-                  </label>
+                  {selectedRuleType && (
+                    <p className="rule-preview span-2">
+                      <strong>{selectedRuleType.label}:</strong>{" "}
+                      {form.ruleValue || selectedRuleType.exampleValue}{" "}
+                      {selectedRuleType.unitLabel}
+                      {" · "}
+                      {selectedRuleType.requiredContext}
+                    </p>
+                  )}
+                  <p className="field-help span-2">
+                    A new or edited rule always returns to <em>awaiting validation</em> and does not
+                    affect compliance until an authorised user validates it.
+                  </p>
                 </>
               )}
             </div>
@@ -702,7 +752,12 @@ function columnCells(tab: Tab, row: Row) {
     case "roads":
       return [r.roadCode, r.name || "—", r.roadType || "—", r.widthM != null ? `${r.widthM} m` : "—", r.isSensitive ? "Yes" : "No"];
     default:
-      return [r.ruleKey, r.zoneType ? `Zone type: ${r.zoneType}` : "Zone-specific", `${r.ruleValue} ${r.unit}`, state];
+      return [
+        r.ruleLabel || String(r.ruleKey).replace(/_/g, " "),
+        r.zoneNumber ? `Zone ${r.zoneNumber}` : r.zoneType ? `Zone type: ${r.zoneType}` : "—",
+        r.requirementDisplay || `${r.ruleValue} ${r.unit}`,
+        r.enforcementState || state,
+      ];
   }
 }
 
@@ -772,16 +827,38 @@ function RecordDetail({
                 ["Sensitive", r.isSensitive ? "Yes" : "No"],
               ]
             : [
-                ["Rule", String(r.ruleKey)],
-                ["Required value", `${r.ruleValue} ${r.unit}`],
-                ["Target", r.zoneNumber ? `Zone ${r.zoneNumber}` : r.zoneType ? `Zone type: ${r.zoneType}` : "—"],
-                ["Active", r.isActive ? "Yes" : "No"],
+                ["Rule", String(r.ruleLabel || String(r.ruleKey).replace(/_/g, " "))],
+                ["Requirement", String(r.requirementDisplay || `${r.ruleValue} ${r.unit}`)],
+                ["Applies to", r.zoneNumber ? `Zone ${r.zoneNumber}` : r.zoneType ? `Zone type: ${r.zoneType}` : "—"],
+                ["Enforcement", String(r.enforcementState || (r.isActive ? "Active" : "Inactive"))],
                 ["AI-extracted", r.extractedByAi ? "Yes" : "No"],
                 ["Human-validated", r.isValidated ? "Yes" : "No"],
                 ["Validated by", r.validatorName ? String(r.validatorName) : "—"],
               ];
   return (
     <div className="grid two-col">
+      {tab === "zoning-rules" && (
+        <div className="span-2">
+          <EnforcementBadge state={String(r.enforcementState || "")} />
+          {r.enforcementState !== "Enforced" && (
+            <Notice kind="error">
+              {r.enforcementState === "Awaiting validation"
+                ? "This rule does not affect compliance yet. An authorised user must validate it before it can produce a violation."
+                : r.enforcementState === "Inactive"
+                  ? "This rule is switched off and is not applied to any detection."
+                  : r.enforcementState === "Unsupported"
+                    ? "This rule type cannot be enforced automatically. It is kept for reference only and is never used to assess a detection."
+                    : "This rule's value or unit is outside the range this rule type accepts, so it is not applied."}
+            </Notice>
+          )}
+          {r.extractedByAi === true && r.isValidated !== true && (
+            <Notice>
+              This rule was extracted automatically from a source document. AI-extracted rules are
+              never applied to compliance until a person has checked and validated them.
+            </Notice>
+          )}
+        </div>
+      )}
       <div className="detail-grid">
         {rows.map(([label, value]) => (
           <div className="detail" key={label}>
