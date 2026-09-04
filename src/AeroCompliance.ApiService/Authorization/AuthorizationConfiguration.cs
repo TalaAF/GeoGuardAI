@@ -29,7 +29,13 @@ public static class AuthorizationConfiguration
                 Roles.Admin, Roles.MunicipalityManager, Roles.Inspector, Roles.Reviewer, Roles.GISAnalyst))
             // Generating a formal report is a review action, so it tracks the reviewer roles rather
             // than the wider read audience (GISAnalyst and MunicipalityManager read only).
-            .AddPolicy(Policies.GenerateReports, p => p.RequireRole(Roles.Admin, Roles.Inspector, Roles.Reviewer));
+            .AddPolicy(Policies.GenerateReports, p => p.RequireRole(Roles.Admin, Roles.Inspector, Roles.Reviewer))
+            // Parcel mutation only: narrower than ManageGis because parcels carry cadastral/
+            // ownership data. GISAnalyst keeps ManageGis for zones/blocks/roads/zoning rules and
+            // keeps read access to parcels, but not parcel mutation. This must exactly match the
+            // frontend's `gis.parcels.edit` capability — the frontend hiding a control is a UX
+            // nicety, this policy is what actually stops the request.
+            .AddPolicy(Policies.EditParcels, p => p.RequireRole(Roles.Admin, Roles.MunicipalityManager));
 
         return services;
     }

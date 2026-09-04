@@ -41,13 +41,6 @@ export type Capability =
   // Create/edit flights, missions, status transitions, upload images, retry processing —
   // Policies.ManageFlights: Admin, MunicipalityManager, DroneOperator.
   | "flights.manage"
-  // Pick which drone operator a flight belongs to, when creating/editing one. Not a distinct
-  // backend policy — still gated by ManageFlights — but FlightsController assigns a DroneOperator
-  // caller to themselves regardless of what they submit (`user.Role == DroneOperator ?
-  // user.UserId : r.DroneOperatorId`), so the picker is meaningless for that role and is hidden
-  // rather than shown-but-ignored. A strict subset of "flights.manage", the same way
-  // "gis.parcels.edit" is a strict subset of "gis.manage".
-  | "flights.chooseOperator"
   // AI Detections (view) — DetectionsController is bare [Authorize]: any authenticated user.
   | "detections.view"
   // Manual compliance re-evaluation — DetectionComplianceController's evaluate-compliance action
@@ -55,17 +48,14 @@ export type Capability =
   | "detections.reevaluate"
   // GIS Records (view zones/blocks/parcels/roads/zoning rules) — bare [Authorize] on every GET.
   | "gis.view"
-  // Create/edit zones/blocks/parcels/roads/zoning rules — Policies.ManageGis: Admin,
-  // MunicipalityManager, GISAnalyst.
+  // Create/edit zones/blocks/roads/zoning rules (not parcels — see gis.parcels.edit below) —
+  // Policies.ManageGis: Admin, MunicipalityManager, GISAnalyst.
   | "gis.manage"
-  // Edit an existing parcel specifically. NOTE: this is a deliberate product restriction, not a
-  // backend one — ParcelsController's Update action is also gated by Policies.ManageGis, which
-  // *does* include GISAnalyst. The frontend withholds parcel editing from GISAnalyst anyway
-  // (cadastral/ownership data is kept to Admin and MunicipalityManager), so this capability is a
-  // strict subset of "gis.manage": holding "gis.manage" does not imply holding this one, and a
-  // denial here does not mean the backend would reject the same call. Documented explicitly so
-  // the frontend-stricter-than-backend gap here is visible rather than silently baked into a
-  // scattered comparison.
+  // Create/edit a parcel specifically — Policies.EditParcels: Admin, MunicipalityManager.
+  // Narrower than "gis.manage" on the backend itself (not just in the frontend): parcels carry
+  // cadastral/ownership data, so ParcelsController's Create/Update actions are gated by
+  // EditParcels rather than the broader ManageGis policy GISAnalyst also holds. GISAnalyst can
+  // still read parcels and can still edit every other GIS layer via "gis.manage".
   | "gis.parcels.edit"
   // Validate a zoning rule — Policies.AnalyzeGis: Admin, GISAnalyst.
   | "gis.validateRule"
@@ -114,7 +104,6 @@ const CAPABILITY_ROLES: Record<Capability, Role[]> = {
   ],
   "flights.view": ALL_ROLES,
   "flights.manage": ["Admin", "MunicipalityManager", "DroneOperator"],
-  "flights.chooseOperator": ["Admin", "MunicipalityManager"],
   "detections.view": ALL_ROLES,
   "detections.reevaluate": ["Admin", "MunicipalityManager", "GISAnalyst"],
   "gis.view": ALL_ROLES,
@@ -161,14 +150,12 @@ export const canViewReviewQueue = (u: CurrentUser | null) => can(u, "reviewQueue
 export const canViewFlights = (u: CurrentUser | null) => can(u, "flights.view");
 export const canOperateFlights = (u: CurrentUser | null) => can(u, "flights.manage");
 export const canUploadImages = (u: CurrentUser | null) => can(u, "flights.manage");
-export const canChooseFlightOperator = (u: CurrentUser | null) =>
-  can(u, "flights.chooseOperator");
 export const canViewDetections = (u: CurrentUser | null) => can(u, "detections.view");
 export const canReevaluateCompliance = (u: CurrentUser | null) =>
   can(u, "detections.reevaluate");
 export const canViewGis = (u: CurrentUser | null) => can(u, "gis.view");
 export const canManageGis = (u: CurrentUser | null) => can(u, "gis.manage");
-/** Stricter than `canManageGis` for parcels specifically — see the capability's own comment. */
+/** Narrower than `canManageGis` for parcels specifically — mirrors Policies.EditParcels. */
 export const canEditParcel = (u: CurrentUser | null) => can(u, "gis.parcels.edit");
 export const canValidateZoningRule = (u: CurrentUser | null) => can(u, "gis.validateRule");
 export const canViewAdministration = (u: CurrentUser | null) => can(u, "administration.view");
@@ -209,3 +196,19 @@ export function homeRouteFor(user: CurrentUser | null): string {
   if (user?.role.name === "DroneOperator" && canViewFlights(user)) return "/flights";
   return "/dashboard";
 }
+
+// --- Presentation-only helpers -----------------------------------------------------------
+// Deliberately NOT part of the Capability table above: nothing here decides whether a request
+// would be accepted or rejected — the backend already produces the same outcome regardless of
+// what the frontend shows. These exist purely to shape a form; misreading one as an authorization
+// check would be the same mistake this file was created to eliminate.
+
+/**
+ * Whether to show the "Drone operator" picker on the flight create/edit form. Purely cosmetic:
+ * `FlightsController.Create`/`Update` binds a DroneOperator caller to themselves regardless of
+ * what this field contains (`user.Role == DroneOperator ? user.UserId : r.DroneOperatorId`), so a
+ * DroneOperator cannot assign a flight to anyone else no matter what the frontend sends — the
+ * picker is hidden for that role only because its value would otherwise be silently discarded,
+ * not because submitting one would be rejected.
+ */
+export const showFlightOperatorPicker = (u: CurrentUser | null) => u?.role.name !== "DroneOperator";

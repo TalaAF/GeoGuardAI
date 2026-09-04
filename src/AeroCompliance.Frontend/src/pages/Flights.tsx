@@ -10,10 +10,10 @@ import type {
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import {
-  canChooseFlightOperator,
   canManageMunicipalities,
   canManageUsers,
   canOperateFlights,
+  showFlightOperatorPicker,
 } from "../auth/capabilities";
 import {
   Card,
@@ -160,7 +160,7 @@ export default function Flights() {
                   </select>
                 </label>
               )}
-              {canChooseFlightOperator(user) && (
+              {showFlightOperatorPicker(user) && (
                 <label>
                   Drone operator
                   <select

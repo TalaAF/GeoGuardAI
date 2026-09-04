@@ -43,4 +43,12 @@ public static class Policies
 
     /// <summary>Produce a formal report from a confirmed violation.</summary>
     public const string GenerateReports = "GenerateReports";
+
+    /// <summary>
+    /// Create/update a parcel specifically. Narrower than <see cref="ManageGis"/> (which also
+    /// covers zones/blocks/roads/zoning rules): parcel records carry cadastral/ownership data, so
+    /// editing them is reserved for Admin and MunicipalityManager. GISAnalyst can still read
+    /// parcels and edit every other GIS layer via ManageGis, but not parcels.
+    /// </summary>
+    public const string EditParcels = "EditParcels";
 }
