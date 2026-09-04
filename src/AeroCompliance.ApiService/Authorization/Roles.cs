@@ -34,4 +34,13 @@ public static class Policies
     public const string AnalyzeGis = "AnalyzeGis";
     public const string ManageGis = "ManageGis";
     public const string ManageFlights = "ManageFlights";
+
+    /// <summary>Read operational analytics. Excludes DroneOperator, whose remit is flight execution.</summary>
+    public const string ViewAnalytics = "ViewAnalytics";
+
+    /// <summary>Read and download generated violation reports.</summary>
+    public const string ViewReports = "ViewReports";
+
+    /// <summary>Produce a formal report from a confirmed violation.</summary>
+    public const string GenerateReports = "GenerateReports";
 }

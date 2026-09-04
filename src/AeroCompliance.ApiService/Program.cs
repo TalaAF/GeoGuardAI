@@ -10,6 +10,10 @@ using Microsoft.OpenApi;
 using AeroCompliance.Infrastructure.Storage;
 using Microsoft.AspNetCore.Http.Features;
 
+// QuestPDF Community License (free for individuals, non-profits and organisations under $1M
+// annual revenue). Declared once at startup, before any report is rendered.
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Aspire service defaults: OpenTelemetry, health checks, service discovery, resilience.

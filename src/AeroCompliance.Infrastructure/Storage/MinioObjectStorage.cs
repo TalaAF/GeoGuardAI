@@ -9,6 +9,12 @@ public interface IObjectStorage
     string Bucket { get; }
     Task EnsureBucketAsync(CancellationToken ct = default);
     Task UploadFileAsync(string objectKey, string filePath, string contentType, CancellationToken ct = default);
+
+    /// <summary>
+    /// Uploads an in-memory payload. Used for artefacts the API generates itself (e.g. report PDFs),
+    /// which never touch the local filesystem.
+    /// </summary>
+    Task UploadBytesAsync(string objectKey, byte[] content, string contentType, CancellationToken ct = default);
     Task<Stream> OpenReadAsync(string objectKey, CancellationToken ct = default);
     Task<bool> ExistsAsync(string objectKey, CancellationToken ct = default);
     Task DeleteAsync(string objectKey, CancellationToken ct = default);
@@ -40,6 +46,14 @@ public sealed class MinioObjectStorage : IObjectStorage
         await EnsureBucketAsync(ct);
         await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
             1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await client.PutObjectAsync(new PutObjectArgs().WithBucket(Bucket).WithObject(objectKey)
+            .WithStreamData(stream).WithObjectSize(stream.Length).WithContentType(contentType), ct);
+    }
+
+    public async Task UploadBytesAsync(string objectKey, byte[] content, string contentType, CancellationToken ct = default)
+    {
+        await EnsureBucketAsync(ct);
+        using var stream = new MemoryStream(content, writable: false);
         await client.PutObjectAsync(new PutObjectArgs().WithBucket(Bucket).WithObject(objectKey)
             .WithStreamData(stream).WithObjectSize(stream.Length).WithContentType(contentType), ct);
     }

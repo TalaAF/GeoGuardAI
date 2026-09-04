@@ -12,6 +12,9 @@ import Detections from "./pages/Detections";
 import Administration from "./pages/Administration";
 import Gis from "./pages/Gis";
 import Audit from "./pages/Audit";
+import Analytics from "./pages/Analytics";
+import Reports from "./pages/Reports";
+import ReportDetail from "./pages/ReportDetail";
 import SettingsPage from "./pages/Settings";
 import Unavailable from "./pages/Unavailable";
 
@@ -37,10 +40,27 @@ function AppRoutes() {
         <Route path="flights/:id" element={<FlightDetail />} />
         <Route path="detections" element={<Detections />} />
         <Route path="gis" element={<Gis />} />
-        <Route path="analytics" element={<Unavailable feature="Analytics" />} />
-        <Route path="reports" element={<Unavailable feature="Reports" />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Unavailable notFound />} />
+      </Route>
+      {/* Analytics and reports mirror the backend ViewAnalytics/ViewReports policies. The
+          backend remains authoritative; this only avoids showing a page that would 403. */}
+      <Route
+        element={
+          <Protected
+            roles={[
+              "Admin",
+              "MunicipalityManager",
+              "Inspector",
+              "Reviewer",
+              "GISAnalyst",
+            ]}
+          />
+        }
+      >
+        <Route path="analytics" element={<Analytics />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="reports/:id" element={<ReportDetail />} />
       </Route>
       <Route element={<Protected roles={["Admin", "MunicipalityManager"]} />}>
         {" "}

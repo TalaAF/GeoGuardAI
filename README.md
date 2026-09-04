@@ -71,8 +71,6 @@ Inspector) can move it to `confirmed_under_notification` or `dismissed`.
 - **Zoning-rule engine** — `ZoningRule` has full CRUD and a `validate` action, but the compliance
   evaluator (`AnalysisResultConsumer.Evaluate`) does not read zoning rules at all; it only checks
   raw road/parcel geometry intersection. `RuleId` on a `Violation` is always `null` today.
-- **Reports (PDF) generation** — the `reports` table and `Report` entity exist; no controller, no
-  generation logic.
 - **Notifications** — the `notifications` table and `Notification` entity exist; no controller, no
   delivery logic.
 - **Police alerts** — the `police_alerts` table and `PoliceAlert` entity exist; no controller, no
@@ -189,10 +187,9 @@ DroneProject/
 
 **Frontend**: fully integrated. `AeroCompliance.Frontend` is a real React 19 + Vite + TypeScript SPA
 with pages for Dashboard, Violations, Flights, GIS, Detections, Administration, Audit, Settings, and
-Login. AppHost builds it via its own [Dockerfile](src/AeroCompliance.Frontend/Dockerfile) (multi-stage
-Node build → nginx) and runs it as the `frontend` container resource, proxying `/api/*` to the
-`apiservice` endpoint (see [nginx.conf.template](src/AeroCompliance.Frontend/nginx.conf.template)). The
-"Analytics" and "Reports" pages currently render a placeholder ([Unavailable.tsx](src/AeroCompliance.Frontend/src/pages/Unavailable.tsx)) because the API has no reports/analytics endpoints.
+Analytics, Reports, and Login. AppHost builds it via its own [Dockerfile](src/AeroCompliance.Frontend/Dockerfile)
+(multi-stage Node build → nginx) and runs it as the `frontend` container resource, proxying `/api/*` to the
+`apiservice` endpoint (see [nginx.conf.template](src/AeroCompliance.Frontend/nginx.conf.template)).
 
 ## 4. Technology stack
 
@@ -628,17 +625,18 @@ require the violation's current status to be exactly `under_review`, otherwise t
 | Role | Typical responsibility | Notable access |
 |---|---|---|
 | **Admin** | Platform-wide administrator | Only role that can manage municipalities (`ManageMunicipalities`, `RequireAdmin`); implicitly satisfies every other policy; has no `municipality_id` |
-| **MunicipalityManager** | Manages one municipality's users and data | `ManageUsers`, `ManageGis`, `ManageFlights` — scoped to their own `municipality_id` |
-| **Inspector** | Reviews violations in the field | `ReviewViolations` |
-| **GISAnalyst** | Maintains and validates GIS layers | `AnalyzeGis` (validate zoning rules), `ManageGis` (CRUD zones/blocks/parcels/roads/rules) |
-| **Reviewer** | Signs off on violation decisions | `ReviewViolations` |
-| **DroneOperator** | Plans and flies missions, uploads imagery | `ManageFlights`, but restricted to flights where they are the assigned operator |
+| **MunicipalityManager** | Manages one municipality's users and data | `ManageUsers`, `ManageGis`, `ManageFlights`, `ViewAnalytics`, `ViewReports` — scoped to their own `municipality_id`; cannot generate reports |
+| **Inspector** | Reviews violations in the field | `ReviewViolations`, `ViewAnalytics`, `ViewReports`, `GenerateReports` |
+| **GISAnalyst** | Maintains and validates GIS layers | `AnalyzeGis` (validate zoning rules), `ManageGis` (CRUD zones/blocks/parcels/roads/rules), `ViewAnalytics`, `ViewReports` (read-only — cannot generate) |
+| **Reviewer** | Signs off on violation decisions | `ReviewViolations`, `ViewAnalytics`, `ViewReports`, `GenerateReports` |
+| **DroneOperator** | Plans and flies missions, uploads imagery | `ManageFlights`, but restricted to flights where they are the assigned operator. **No** analytics or report access — flight execution is their remit, so Analytics and Reports are hidden in the frontend *and* refused with `403` by the API |
 
 Enforcement notes:
 
 - Authorization is **role-based via named policies** (`AuthorizationConfiguration.cs`) —
   `RequireAdmin`, `ManageUsers`, `ManageMunicipalities`, `ReviewViolations`, `OperateDrone`,
-  `AnalyzeGis`, `ManageGis`, `ManageFlights`. The `permissions`/`role_permissions` tables are **not**
+  `AnalyzeGis`, `ManageGis`, `ManageFlights`, `ViewAnalytics`, `ViewReports`, `GenerateReports`.
+  The `permissions`/`role_permissions` tables are **not**
   wired into any check — do not describe permission enforcement as granular/data-driven.
 - **Municipality scoping**: every controller filters by `user.MunicipalityId` unless the caller is
   Admin (`IsPlatformAdmin`). A resource belonging to a different municipality returns **`404`, not
@@ -647,8 +645,12 @@ Enforcement notes:
   municipality (`UsersController.TryResolveAssignment`).
 - **DroneOperator** can only see/manage flights where they are `DroneOperatorId` — enforced via the
   `Manageable()` query filter in `FlightsController`/`FlightImagesController`/`ImagesController`.
-- **Inspector/Reviewer** share the `ReviewViolations` policy — there is no behavioral difference
-  between them today.
+- **Inspector/Reviewer** share the `ReviewViolations` and `GenerateReports` policies — there is no
+  behavioral difference between them today.
+- **Analytics and reports** are oversight functions: `ViewAnalytics`/`ViewReports` cover Admin,
+  MunicipalityManager, Inspector, Reviewer and GISAnalyst, while `GenerateReports` is narrower
+  (Admin, Inspector, Reviewer) because producing a formal report is a review action. Hiding the
+  nav entry is presentation only — the policy on the controller is what enforces access.
 
 ## 11. Development users
 
@@ -768,7 +770,64 @@ combinations return `415`.
 |---|---|---|
 | `GET /api/audit` | Admin or MunicipalityManager | Paged, filterable audit trail (tenant-scoped for non-Admin) |
 
-### Reports, notifications, police alerts
+### Analytics (`/api/analytics`)
+| Method & path | Policy | Purpose |
+|---|---|---|
+| `GET /api/analytics/overview` | `ViewAnalytics` | Summary counters, daily activity series, distributions, top affected roads/zones/parcels, processing statistics |
+
+Query parameters: `from`, `to` (UTC; default the last 30 days, maximum one year), and
+`municipalityId` (platform Admin only — any other role supplying a different municipality gets
+`403`). An out-of-order or over-long range returns `400`. Every figure is a database aggregation;
+days with no activity are returned as explicit zeroes so the frontend chart stays continuous.
+
+Returned metrics: flights and completed flights; images uploaded, processed and failed; total
+detections and average AI confidence; candidate/confirmed/dismissed violation counts; a daily
+series (images, detections, candidates, confirmations, dismissals); distributions by violation
+status, detection class, violation type, flight status and image-processing status; the top five
+roads, zones and parcels by violation count (identified by code/number, never id); and processing
+durations (average, fastest, slowest, success rate, failed count, number of images measured).
+
+### Reports (`/api/reports`, `/api/violations/{id}/reports`)
+| Method & path | Policy | Purpose |
+|---|---|---|
+| `GET /api/reports` | `ViewReports` | Paged, filterable (date range, search, generation source, municipality for Admin) |
+| `GET /api/reports/{id}` | `ViewReports` | Full human-readable report content, including geometry for map rendering |
+| `GET /api/reports/{id}/download` | `ViewReports` | Streams the stored PDF (`application/pdf`) through the API |
+| `GET /api/violations/{id}/reports` | `GenerateReports` | Reports already generated for a violation |
+| `POST /api/violations/{id}/reports` | `GenerateReports` | Generates a report; `?regenerate=true` produces a new version |
+
+**Eligibility.** A report can only be generated for a violation in the confirmed canonical status
+(`confirmed_under_notification`). Anything else — including `under_review` and `dismissed` —
+returns `409` with "A formal report can be generated after the violation is confirmed." Generating
+a report never changes the violation's review decision. Reports are human-reviewed outputs and are
+never produced automatically from an AI detection.
+
+**Generation flow.** The API renders the PDF in-process, uploads it to MinIO under a
+server-generated key (`reports/{municipalityId}/{violationId}/{reportId}.pdf`), and only then
+inserts the `reports` row together with a `report.generate` audit entry in the same transaction. If
+the database write fails after the upload, the orphaned object is deleted so storage cannot
+accumulate files no record points at. A repeated `POST` while one is already in flight returns
+`409`; a repeated `POST` afterwards returns the existing report rather than a duplicate.
+
+**Storage and references.** Object keys, bucket names and MinIO credentials are never returned to a
+client — the PDF is only reachable by streaming through `GET /api/reports/{id}/download`. Report and
+violation references (`AC-2026-…`, `VIO-…`) are derived deterministically from the row identifier,
+so no schema change was needed and the same record always renders the same reference in the API,
+the PDF and the UI. Cross-tenant and unknown ids are indistinguishable: both return `404`.
+
+**PDF.** Rendered with [QuestPDF](https://www.questpdf.com/) (Community License — MIT text, free for
+individuals, non-profits and organisations under $1M annual revenue), chosen because it is pure
+managed .NET and bundles its own text shaping, so output does not depend on fonts installed on the
+host and no browser, headless Chromium or external tool is involved. The document is English-only in
+this MVP and contains: municipality, report reference, generation date and current status; the
+violation summary (type, detection class, AI confidence, flight mission, source image filename);
+location (road, parcel, zone, block, and an approximate centre as latitude/longitude — never raw
+GeoJSON); the compliance evaluation (measured, required, exceedance, unit); human review (decision,
+reviewer, timestamp, notes); the status history; an embedded evidence preview when the source is a
+JPEG or PNG, or a plain-language note when it is GeoTIFF; and the disclaimer "AI detections are
+decision-support evidence. The recorded violation outcome reflects human review in AeroCompliance."
+
+### Notifications, police alerts
 Not implemented — no controllers exist for these; see §1.
 
 ### Health
@@ -963,8 +1022,12 @@ Open the RabbitMQ **management UI** from the `messaging` resource's endpoint in 
 
 - Bucket: **`aerocompliance-images`** (created automatically by both the API's `MinioObjectStorage` and
   the AI Worker on first use).
-- Object key layout: `{municipalityId:N}/{flightId:N}/{yyyy/MM/dd}/{imageId:N}{extension}` — tenant and
-  flight are baked into the path.
+- Object key layout for imagery: `{municipalityId:N}/{flightId:N}/{yyyy/MM/dd}/{imageId:N}{extension}`
+  — tenant and flight are baked into the path.
+- Object key layout for report PDFs: `reports/{municipalityId:N}/{violationId:N}/{reportId:N}.pdf`,
+  written to the same bucket through the same `EnsureBucketAsync` initialisation used for images.
+  This key is **internal only** — it is never returned by any endpoint; the PDF is reachable solely
+  by streaming through `GET /api/reports/{id}/download`.
 - Accessed by: `AeroCompliance.ApiService` (write on upload, delete on upload-compensation) and the AI
   Worker (read-only download for inference). `ProcessingService` never touches MinIO.
 - The database stores metadata (`bucket`, `object_key`, `sha256_hash`, size, capture info) while MinIO
@@ -977,6 +1040,8 @@ Open the RabbitMQ **management UI** from the `messaging` resource's endpoint in 
   ever talks to `/api/*`.
 - **Upload compensation**: if the database insert fails after the object was already written to MinIO,
   `FlightImagesController.Upload` deletes the orphaned object in its `catch` block before rethrowing.
+  `ViolationReportsController.Generate` applies the same compensation for report PDFs — the `reports`
+  row is only inserted after a successful upload, and a failed insert deletes the object it wrote.
 - Named volume: `aerocompliance-miniodata`.
 
 ## 19. Configuration
@@ -1213,14 +1278,32 @@ production use:
 - A zoning-rule engine that the compliance evaluator actually consults (`RuleId` is currently always
   `null`).
 - Official municipality GIS import (current data is CRUD-entered demo data).
-- Reports (PDF) generation, notifications, and police alerts — schema exists, no logic.
+- Notifications and police alerts — schema exists, no logic.
 - All of §24's security/production hardening items.
 - A production deployment target (compose/Kubernetes manifests, secret management, backups).
 - Automated test coverage for the GIS/upload/AI/violation pipeline (today only the smoke script
   exercises it, manually).
 
+**Analytics and reports MVP limitations**
+- Report sign-off is displayed but there is no endpoint to sign a report off — `signed_off_by` /
+  `signed_off_at` are always null in practice, and the UI says "Not signed off" rather than implying
+  an approval that did not happen.
+- Report and violation references are derived from the row id rather than an allocated sequence, so
+  they are stable and unique per record but not consecutive, and a reference cannot be searched as an
+  exact stored value (search matches the underlying id text).
+- Duplicate-generation protection is a per-process lock. A multi-instance deployment would need a
+  database or distributed lock to give the same guarantee.
+- Evidence previews are embedded only for JPEG/PNG sources. GeoTIFF — the normal production format —
+  is reported in the PDF as a plain-language note; rendering a GeoTIFF preview would need a raster
+  decode step that only the AI Worker currently has.
+- PDF output is English-only. Arabic was deliberately left out rather than risk broken glyph shaping.
+- Analytics has no caching; every page load re-runs the aggregations. Fine at pilot data volumes,
+  worth revisiting with a year of production data.
+- Cross-tenant isolation for analytics/reports is enforced in code and was verified for the
+  non-admin override path, but the development database currently holds a single municipality, so a
+  true two-tenant separation test has not been run against real data.
+
 **Future enhancements**
 - Fine-grained, data-driven permissions using the existing `permissions`/`role_permissions` tables.
 - Orthomosaic ingestion and detection.
-- Frontend Analytics and Reports pages (currently placeholders).
 - Distinguishing Inspector vs. Reviewer behavior (currently identical access).

@@ -273,3 +273,127 @@ export interface ZoningRule {
   isActive: boolean;
   createdAt: string;
 }
+
+// --- Phase 6: analytics -----------------------------------------------------
+export interface AnalyticsRange {
+  from: string;
+  to: string;
+  days: number;
+}
+export interface AnalyticsSummary {
+  totalFlights: number;
+  completedFlights: number;
+  imagesUploaded: number;
+  imagesProcessed: number;
+  imagesFailed: number;
+  totalDetections: number;
+  candidateViolations: number;
+  confirmedViolations: number;
+  dismissedViolations: number;
+  averageConfidence: number | null;
+  averageProcessingSeconds: number | null;
+}
+export interface AnalyticsDailyPoint {
+  day: string;
+  imagesUploaded: number;
+  detections: number;
+  candidateViolations: number;
+  violationsConfirmed: number;
+  violationsDismissed: number;
+}
+export interface AnalyticsCategory {
+  key: string;
+  label: string;
+  count: number;
+}
+export interface AnalyticsRanking {
+  reference: string;
+  name: string | null;
+  count: number;
+}
+export interface AnalyticsProcessing {
+  averageSeconds: number | null;
+  fastestSeconds: number | null;
+  slowestSeconds: number | null;
+  successRate: number | null;
+  failedCount: number;
+  measuredCount: number;
+}
+export interface AnalyticsOverview {
+  range: AnalyticsRange;
+  municipalityName: string | null;
+  platformWide: boolean;
+  summary: AnalyticsSummary;
+  daily: AnalyticsDailyPoint[];
+  violationsByStatus: AnalyticsCategory[];
+  detectionsByClass: AnalyticsCategory[];
+  violationsByType: AnalyticsCategory[];
+  flightsByStatus: AnalyticsCategory[];
+  imagesByStatus: AnalyticsCategory[];
+  topRoads: AnalyticsRanking[];
+  topZones: AnalyticsRanking[];
+  topParcels: AnalyticsRanking[];
+  processing: AnalyticsProcessing;
+}
+
+// --- Phase 6: reports -------------------------------------------------------
+export interface ReportSummary {
+  id: string;
+  reference: string;
+  violationReference: string;
+  violationType: string;
+  municipalityName: string;
+  violationStatus: string;
+  roadCode: string | null;
+  roadName: string | null;
+  parcelNumber: string | null;
+  generatedAt: string;
+  generatedBy: string;
+  signedOff: boolean;
+  signedOffByName: string | null;
+  signedOffAt: string | null;
+  downloadAvailable: boolean;
+}
+export interface ReportHistory {
+  status: string;
+  statusLabel: string;
+  actorName: string | null;
+  notes: string | null;
+  changedAt: string;
+}
+export interface ReportDetails {
+  id: string;
+  reference: string;
+  municipalityName: string;
+  violationId: string;
+  violationReference: string;
+  violationType: string;
+  violationStatus: string;
+  violationStatusLabel: string;
+  detectionClass: string;
+  detectionConfidence: number;
+  flightMissionName: string | null;
+  sourceImageFileName: string | null;
+  roadCode: string | null;
+  roadName: string | null;
+  parcelNumber: string | null;
+  zoneNumber: string | null;
+  blockNumber: string | null;
+  evaluationType: string | null;
+  measuredValue: number | null;
+  requiredValue: number | null;
+  exceedanceValue: number | null;
+  exceedanceAreaM2: number | null;
+  unit: string | null;
+  reviewNotes: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  statusHistory: ReportHistory[];
+  geometry: unknown;
+  generatedAt: string;
+  generatedBy: string;
+  signedOff: boolean;
+  signedOffByName: string | null;
+  signedOffAt: string | null;
+  downloadAvailable: boolean;
+}

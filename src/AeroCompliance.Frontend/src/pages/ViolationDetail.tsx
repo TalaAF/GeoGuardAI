@@ -1,8 +1,15 @@
-import { ArrowLeft, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Download,
+  FileText,
+  RefreshCw,
+  XCircle,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, errorMessage } from "../api/client";
-import type { Detection, ViolationDetails } from "../api/types";
+import type { Detection, ReportSummary, ViolationDetails } from "../api/types";
 import { hasRole, useAuth } from "../auth/AuthContext";
 import {
   Card,
@@ -15,6 +22,11 @@ import {
 } from "../components/Common";
 import GeoMap, { type FeatureKind } from "../components/GeoMap";
 import { humanizeCode, shortRef } from "../lib/labels";
+import { downloadReport } from "../lib/reports";
+
+// Reports are only meaningful once a human has confirmed the violation; this mirrors the
+// backend rule rather than replacing it (the API rejects anything else with a 409).
+const CONFIRMED_STATUS = "confirmed_under_notification";
 
 // Detection != violation: the map style below always distinguishes the raw AI proposal (never shown
 // here — this page only ever shows a *reviewed* candidate) from where that candidate currently
@@ -27,6 +39,7 @@ function statusToFeatureKind(status: string): FeatureKind {
 
 export default function ViolationDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [data, setData] = useState<ViolationDetails | null>(null);
   const [detection, setDetection] = useState<Detection | null>(null);
@@ -34,6 +47,8 @@ export default function ViolationDetail() {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [report, setReport] = useState<ReportSummary | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
   const load = useCallback(async () => {
     if (!id) return;
     setError("");
@@ -41,6 +56,24 @@ export default function ViolationDetail() {
       const violation = (await api.get<ViolationDetails>(`/violations/${id}`)).data;
       setData(violation);
       setDetection((await api.get<Detection>(`/detections/${violation.detectionId}`)).data);
+      // Surface an already-generated report so the action reads "Download" rather than
+      // silently regenerating. A failure here must not block the violation itself.
+      if (violation.status === CONFIRMED_STATUS) {
+        try {
+          const existing = (
+            await api.get<{ id: string; reference: string }[]>(
+              `/violations/${violation.id}/reports`,
+            )
+          ).data;
+          setReport(
+            existing.length > 0 ? (existing[0] as unknown as ReportSummary) : null,
+          );
+        } catch {
+          setReport(null);
+        }
+      } else {
+        setReport(null);
+      }
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -78,6 +111,38 @@ export default function ViolationDetail() {
       setBusy(false);
     }
   };
+  const generateReport = async () => {
+    if (!id || reportBusy) return; // guards a double click
+    setReportBusy(true);
+    setError("");
+    try {
+      const created = (await api.post<ReportSummary>(`/violations/${id}/reports`)).data;
+      setReport(created);
+      navigate(`/reports/${created.id}`);
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.status === 409
+          ? "A formal report can be generated after the violation is confirmed."
+          : errorMessage(e),
+      );
+    } finally {
+      setReportBusy(false);
+    }
+  };
+
+  const downloadExisting = async () => {
+    if (!report || reportBusy) return;
+    setReportBusy(true);
+    setError("");
+    try {
+      await downloadReport(api, report.id, report.reference);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setReportBusy(false);
+    }
+  };
+
   if (!data && !error) return <Spinner />;
   return (
     <div className="page">
@@ -251,6 +316,51 @@ export default function ViolationDetail() {
                   </div>
                 </Card>
               )}
+            {hasRole(user, ["Admin", "Reviewer", "Inspector"]) && (
+              <Card>
+                <h2>Formal report</h2>
+                {data.status !== CONFIRMED_STATUS ? (
+                  <Notice>
+                    A formal report can be generated after the violation is
+                    confirmed.
+                  </Notice>
+                ) : (
+                  <>
+                    <p className="chart-note">
+                      Produces a PDF compliance report from the reviewed record
+                      and files it under Reports.
+                    </p>
+                    <div className="actions">
+                      {report ? (
+                        <>
+                          <Link className="primary" to={`/reports/${report.id}`}>
+                            <FileText size={14} />
+                            View {report.reference}
+                          </Link>
+                          <button
+                            className="secondary"
+                            disabled={reportBusy}
+                            onClick={() => void downloadExisting()}
+                          >
+                            <Download size={14} />
+                            {reportBusy ? "Preparing…" : "Download PDF"}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="primary"
+                          disabled={reportBusy}
+                          onClick={() => void generateReport()}
+                        >
+                          <FileText size={14} />
+                          {reportBusy ? "Generating report…" : "Generate report"}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </Card>
+            )}
           </div>
         </div>
       )}
