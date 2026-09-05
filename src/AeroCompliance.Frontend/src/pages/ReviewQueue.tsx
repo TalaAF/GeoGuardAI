@@ -9,6 +9,7 @@ import {
   Card,
   Empty,
   Notice,
+  SourceBadge,
   Pager,
   PageTitle,
   Spinner,
@@ -265,7 +266,15 @@ export default function ReviewQueue() {
                               .toUpperCase()}`}
                           </Link>
                         </td>
-                        <td>{humanizeCode(v.violationType)}</td>
+                        <td>
+                          <div className="badge-stack">
+                            <span>{humanizeCode(v.violationType)}</span>
+                            <SourceBadge resultSource={v.resultSource} />
+                            {v.isExperimental && (
+                              <span className="status status-under_review">Experimental</span>
+                            )}
+                          </div>
+                        </td>
                         <td>{v.flightMissionName || "—"}</td>
                         <td>{row?.location ?? "—"}</td>
                         <td>{row?.ruleResult ?? "—"}</td>

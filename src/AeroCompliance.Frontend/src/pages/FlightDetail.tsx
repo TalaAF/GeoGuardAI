@@ -24,8 +24,10 @@ import {
 } from "../components/Common";
 import FlightEdit from "../components/FlightEdit";
 import ImageUploadPanel from "../components/ImageUploadPanel";
+import AnalysisSummaryPanel from "../components/AnalysisSummaryPanel";
 import GeoMap, { type MapFeature, type MapPoint } from "../components/GeoMap";
 import { captureTimeSourceLabel, humanizeCode, locationSourceLabel, shortRef } from "../lib/labels";
+import { aiClassLabel } from "../lib/provenance";
 
 export default function FlightDetail() {
   const { id } = useParams();
@@ -33,6 +35,8 @@ export default function FlightDetail() {
   const [flight, setFlight] = useState<FlightDetails | null>(null);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [images, setImages] = useState<ImageInfo[]>([]);
+  // Analysis summaries are fetched per image on demand, so the image list stays one request.
+  const [openAnalysis, setOpenAnalysis] = useState<string | null>(null);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [violations, setViolations] = useState<ViolationSummary[]>([]);
   const [error, setError] = useState("");
@@ -198,12 +202,13 @@ export default function FlightDetail() {
                           <th>Captured</th>
                           <th>Location</th>
                           <th>Geospatial info</th>
+                          <th>Analysis</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {images.map((x) => (
+                        {images.flatMap((x) => [
                           <tr key={x.id}>
-                            <td>{x.originalFileName}</td>
+                            <td className="cell-wrap">{x.originalFileName}</td>
                             <td>
                               <Status value={x.processingStatus} />
                               {x.metadataRequiresReview && (
@@ -264,8 +269,25 @@ export default function FlightDetail() {
                                 "—"
                               )}
                             </td>
-                          </tr>
-                        ))}
+                            <td>
+                              <button
+                                className="secondary"
+                                onClick={() =>
+                                  setOpenAnalysis((cur) => (cur === x.id ? null : x.id))
+                                }
+                              >
+                                {openAnalysis === x.id ? "Hide" : "View"}
+                              </button>
+                            </td>
+                          </tr>,
+                          openAnalysis === x.id ? (
+                            <tr key={`${x.id}-analysis`}>
+                              <td colSpan={7}>
+                                <AnalysisSummaryPanel imageId={x.id} />
+                              </td>
+                            </tr>
+                          ) : null,
+                        ])}
                       </tbody>
                     </table>
                   </div>
@@ -389,8 +411,12 @@ export default function FlightDetail() {
                       (d): MapFeature => ({
                         id: d.id,
                         geometry: d.geometry,
-                        kind: "detection",
-                        label: `AI detection · ${d.classLabel}`,
+                        kind: d.isApproximate
+                          ? "detectionEstimated"
+                          : d.resultSource === "MockGeographicScenario"
+                            ? "detectionMock"
+                            : "detection",
+                        label: `AI detection · ${aiClassLabel(d.className, d.classId)}`,
                       }),
                     )}
                     legend
@@ -408,7 +434,7 @@ export default function FlightDetail() {
                     <div className="detail" key={d.id}>
                       <small>AI detection · Detection {shortRef(d.id)}</small>
                       <strong>
-                        {d.classLabel || "Unclassified"} ·{" "}
+                        {aiClassLabel(d.className, d.classId)} ·{" "}
                         <span className="confidence">
                           {fmtPercent(d.confidence)}
                         </span>

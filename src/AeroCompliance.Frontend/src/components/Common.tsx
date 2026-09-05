@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { provenanceBadge } from "../lib/provenance";
 
 export function PageTitle({
   title,
@@ -66,6 +67,27 @@ export function Status({ value }: { value: string }) {
     </span>
   );
 }
+/**
+ * Where a result's location came from. Rendered from recorded provenance; a "legacy" badge means
+ * the row predates provenance tracking and the label was inferred, not read.
+ */
+export function SourceBadge({
+  resultSource,
+  mode,
+  fileName,
+}: {
+  resultSource?: string | null;
+  mode?: string | null;
+  fileName?: string | null;
+}) {
+  const badge = provenanceBadge(resultSource, { mode, fileName });
+  return (
+    <span className={`source-badge source-${badge.tone}`} title={badge.title}>
+      {badge.label}
+    </span>
+  );
+}
+
 export function Pager({
   page,
   totalPages,

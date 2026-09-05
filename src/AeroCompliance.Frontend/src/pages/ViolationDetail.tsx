@@ -20,6 +20,7 @@ import { canGenerateViolationReport, canReviewViolations } from "../auth/capabil
 import {
   Card,
   Notice,
+  SourceBadge,
   PageTitle,
   Spinner,
   Status,
@@ -27,6 +28,7 @@ import {
   fmtPercent,
 } from "../components/Common";
 import GeoMap, { type FeatureKind } from "../components/GeoMap";
+import { APPROXIMATE_WARNING, MOCK_WARNING, aiClassLabel } from "../lib/provenance";
 import { humanizeCode, shortRef } from "../lib/labels";
 import { downloadReport } from "../lib/reports";
 import ComplianceResults from "../components/ComplianceResults";
@@ -193,6 +195,28 @@ export default function ViolationDetail() {
                   ? "AI detection — not yet a confirmed violation. Review the evidence below before deciding."
                   : `This candidate has been reviewed: ${humanizeCode(data.status)}.`}
               </Notice>
+              {/* Provenance is stated before any measurement, so an experimental or synthetic case
+                  is never read as an authoritative municipal violation. */}
+              <div className="badge-stack">
+                <SourceBadge resultSource={data.resultSource} />
+                {data.isExperimental && (
+                  <span className="status status-under_review">Experimental candidate</span>
+                )}
+                {data.requiresManualReview && (
+                  <span className="status status-under_review">Requires manual review</span>
+                )}
+              </div>
+              {data.isApproximate && (
+                <Notice kind="error">
+                  <strong>Experimental candidate from estimated geometry.</strong>{" "}
+                  {APPROXIMATE_WARNING} It is not an official or confirmed municipal violation.
+                </Notice>
+              )}
+              {data.resultSource === "MockGeographicScenario" && (
+                <Notice kind="info">
+                  <strong>Deterministic development scenario.</strong> {MOCK_WARNING}
+                </Notice>
+              )}
               <div className="detail-grid">
                 <div className="detail">
                   <small>Status</small>
@@ -209,8 +233,8 @@ export default function ViolationDetail() {
                   </strong>
                 </div>
                 <div className="detail">
-                  <small>Detected class</small>
-                  <strong>{data.detectionClass || "Unclassified"}</strong>
+                  <small>AI class</small>
+                  <strong>{aiClassLabel(data.detectionClass, data.detectionClassId)}</strong>
                 </div>
                 <div className="detail">
                   <small>Source image</small>

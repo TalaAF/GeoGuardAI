@@ -13,6 +13,9 @@ import { useEffect, useRef } from "react";
  */
 export type FeatureKind =
   | "detection"
+  | "detectionEstimated"
+  | "detectionMock"
+  | "reference"
   | "candidate"
   | "confirmed"
   | "dismissed"
@@ -35,6 +38,11 @@ export interface MapFeature {
 
 const STYLE: Record<FeatureKind, L.PathOptions> = {
   detection: { color: "#2563eb", weight: 2, fillOpacity: 0.08 },
+  // Estimated geometry is drawn dashed so an approximate position is visually distinct from a
+  // validated one even before the reader looks at any label.
+  detectionEstimated: { color: "#c2410c", weight: 2, fillOpacity: 0.10, dashArray: "6 4" },
+  detectionMock: { color: "#7c3aed", weight: 2, fillOpacity: 0.10, dashArray: "2 4" },
+  reference: { color: "#0369a1", weight: 1, fillOpacity: 0.06 },
   candidate: { color: "#c2410c", weight: 2, fillOpacity: 0.15 },
   confirmed: { color: "#b91c1c", weight: 2, fillOpacity: 0.25 },
   dismissed: { color: "#64748b", weight: 1, fillOpacity: 0.05, dashArray: "4 3" },
@@ -43,6 +51,9 @@ const STYLE: Record<FeatureKind, L.PathOptions> = {
 };
 const LEGEND: Array<[FeatureKind, string]> = [
   ["detection", "AI detection"],
+  ["detectionEstimated", "Real estimated geometry"],
+  ["detectionMock", "Mock geometry"],
+  ["reference", "GIS reference feature"],
   ["candidate", "Candidate violation"],
   ["confirmed", "Confirmed violation"],
   ["dismissed", "Dismissed violation"],

@@ -64,6 +64,24 @@ export default function Dashboard() {
         }
       />
       {error && <Notice kind="error">{error}</Notice>}
+      {/* The headline totals below count every candidate regardless of how it was produced. The
+          breakdown states plainly how many are synthetic or experimental, so a development row can
+          never be read as a confirmed municipal enforcement figure. */}
+      {data?.breakdown &&
+        (data.breakdown.mockAnalyses > 0 ||
+          data.breakdown.experimentalCandidates > 0 ||
+          data.breakdown.legacyUnclassifiedCandidates > 0) && (
+          <Notice kind="info">
+            This environment contains development and experimental data.{" "}
+            {data.breakdown.mockAnalyses} mock analysis/analyses and{" "}
+            {data.breakdown.experimentalCandidates} experimental candidate(s) are included in the
+            totals below. Of {data.breakdown.humanConfirmedViolations} human-confirmed violation(s),{" "}
+            <strong>{data.breakdown.humanConfirmedExcludingSynthetic}</strong> come from a recorded
+            non-synthetic source; {data.breakdown.legacyUnclassifiedCandidates} candidate(s) predate
+            provenance tracking, so their origin is not recorded and they must not be read as
+            verified real violations.
+          </Notice>
+        )}
       {data && (
         <>
           <div className="grid stats">
@@ -79,6 +97,49 @@ export default function Dashboard() {
               </Card>
             ))}
           </div>
+          {data.breakdown && (
+            <Card>
+              <h2>What these numbers are made of</h2>
+              <div className="count-strip">
+                <div className="count">
+                  <small>Real YOLO analyses</small>
+                  <strong>{data.breakdown.realYoloAnalyses}</strong>
+                </div>
+                <div className="count">
+                  <small>Mock analyses</small>
+                  <strong>{data.breakdown.mockAnalyses}</strong>
+                </div>
+                <div className="count">
+                  <small>Geographic detections</small>
+                  <strong>{data.breakdown.geographicDetections}</strong>
+                </div>
+                <div className="count">
+                  <small>Model-only detections</small>
+                  <strong>{data.breakdown.modelOnlyDetections}</strong>
+                </div>
+                <div className="count">
+                  <small>Experimental candidates</small>
+                  <strong>{data.breakdown.experimentalCandidates}</strong>
+                </div>
+                <div className="count">
+                  <small>Mock candidates</small>
+                  <strong>{data.breakdown.mockCandidates}</strong>
+                </div>
+                <div className="count">
+                  <small>Validated candidates</small>
+                  <strong>{data.breakdown.validatedCandidates}</strong>
+                </div>
+                <div className="count">
+                  <small>Legacy — source not recorded</small>
+                  <strong>{data.breakdown.legacyUnclassifiedCandidates}</strong>
+                </div>
+                <div className="count">
+                  <small>Human-confirmed (excl. synthetic)</small>
+                  <strong>{data.breakdown.humanConfirmedExcludingSynthetic}</strong>
+                </div>
+              </div>
+            </Card>
+          )}
           <div className="grid two-col">
             <Card>
               <h2>Recent violations</h2>

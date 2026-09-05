@@ -1435,3 +1435,54 @@ textarea {
   height: 16px;
   margin-top: 2px;
 }
+
+/* Provenance badges: one visual language for "where did this location come from". */
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid transparent;
+}
+.source-real { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.source-estimated { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.source-modelOnly { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
+.source-mock { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+.source-reference { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
+.source-unknown { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+
+/* Long filenames and badge stacks must wrap rather than widen the table. */
+.cell-wrap { max-width: 260px; overflow-wrap: anywhere; word-break: break-word; }
+.badge-stack { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+
+/* Compact count strip for the analysis summary. */
+.count-strip { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 2px; }
+.count-strip .count {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 92px;
+}
+.count-strip .count small { display: block; color: #64748b; font-size: 10px; }
+.count-strip .count strong { font-size: 15px; }
+
+/* Filter bar wraps on narrow viewports instead of overflowing. */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.filter-bar > label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #475569; }
+.filter-bar select,
+.filter-bar input { min-width: 130px; }
+@media (max-width: 720px) {
+  .filter-bar > label { flex: 1 1 45%; }
+  .cell-wrap { max-width: 150px; }
+}
+
+/* Secondary descriptive text inside a table cell. */
+.muted { color: var(--muted); font-size: 11px; margin-top: 2px; }

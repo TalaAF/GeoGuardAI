@@ -38,6 +38,10 @@ export interface ViolationSummary {
   flightMissionName?: string | null;
   createdAt: string;
   updatedAt: string;
+  resultSource?: string | null;
+  isApproximate?: boolean;
+  isExperimental?: boolean;
+  requiresManualReview?: boolean;
 }
 export interface ViolationHistory {
   status: string;
@@ -46,6 +50,9 @@ export interface ViolationHistory {
   changedAt: string;
 }
 export interface ViolationDetails extends ViolationSummary {
+  georeferencingConfidence?: string | null;
+  sourceGeoreferencingMethod?: string | null;
+  detectionClassId?: number | null;
   measuredValue: number | null;
   requiredValue: number | null;
   exceedanceValue: number | null;
@@ -79,6 +86,21 @@ export interface DashboardSummary {
   completedProcessingCount: number | null;
   recentViolations: ViolationSummary[];
   countsByStatus: StatusCount[];
+  breakdown?: ResultBreakdown | null;
+}
+
+/** Splits headline counts by how each result was produced. */
+export interface ResultBreakdown {
+  realYoloAnalyses: number;
+  mockAnalyses: number;
+  geographicDetections: number;
+  modelOnlyDetections: number;
+  experimentalCandidates: number;
+  mockCandidates: number;
+  validatedCandidates: number;
+  legacyUnclassifiedCandidates: number;
+  humanConfirmedViolations: number;
+  humanConfirmedExcludingSynthetic: number;
 }
 export interface FlightSummary {
   id: string;
@@ -160,15 +182,58 @@ export interface ProcessingStatus {
   completedAt: string | null;
   errorCode: string | null;
   errorMessage: string | null;
+  analysis?: AnalysisSummary | null;
 }
+
+/** What one analysis produced. Model-only detections are real, but deliberately non-geographic. */
+export interface AnalysisSummary {
+  analysisId: string;
+  requestId: string | null;
+  mode: string;
+  status: string;
+  modelName: string | null;
+  modelVersion: string | null;
+  totalDetections: number;
+  geographicDetections: number;
+  modelOnlyDetections: number;
+  outsideTrustedRoiCount: number;
+  candidateViolationCount: number;
+  geographicStatus: string;
+  geographicEvaluationEligibility: string;
+  geographicSkipReason: string | null;
+  georeferencingMethod: string | null;
+  georeferencingConfidence: string | null;
+  trustedRoiRadiusM: number | null;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+/** Provenance of a result's geometry, as emitted by the AI worker. */
+export type ResultSource =
+  | "RealYoloEstimatedGeometry"
+  | "RealYoloGeoreferencedGeometry"
+  | "RealYoloModelOnly"
+  | "MockGeographicScenario"
+  | "ImportedGisReference";
+
 export interface Detection {
   id: string;
   imageId: string;
   imageAnalysisId: string | null;
   externalDetectionId?: string | null;
   classId: number | null;
-  classLabel: string;
+  /** The AI model's own class name ("building", "road"). Serialized by the API as `className`. */
+  className: string;
   confidence: number;
+  resultSource?: ResultSource | string | null;
+  isApproximate?: boolean;
+  requiresManualReview?: boolean;
+  georeferencingConfidence?: string | null;
+  sourceGeoreferencingMethod?: string | null;
+  distanceFromAnchorM?: number | null;
+  analysisMode?: string | null;
+  analysisRequestId?: string | null;
+  georeferencingStatus?: string | null;
+  trustedRoiRadiusM?: number | null;
   geometry: unknown;
   areaM2?: number | null;
   perimeterM?: number | null;

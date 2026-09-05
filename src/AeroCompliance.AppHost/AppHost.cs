@@ -70,12 +70,12 @@ builder.AddProject<Projects.AeroCompliance_ProcessingService>("processingservice
     .WaitFor(apiService);
 
 // AI Worker mode is chosen at launch, not baked in:
-//   AI_MODE=yolo (default here) runs the real model from the read-only mount below;
-//   set AEROCOMPLIANCE_AI_MODE=mock to fall back to the deterministic mock without a rebuild.
-// The dependency profile must match: real inference needs the ultralytics/PyTorch profile.
-var aiMode = Environment.GetEnvironmentVariable("AEROCOMPLIANCE_AI_MODE")?.Trim().ToLowerInvariant() is "mock"
-    ? "mock"
-    : "yolo";
+//   the deterministic mock is the default, so a plain `dotnet run` needs no model weights and no
+//   multi-gigabyte image; set AEROCOMPLIANCE_AI_MODE=yolo to run the real model from the read-only
+//   mount below. The dependency profile follows the mode: real inference needs ultralytics/PyTorch.
+var aiMode = Environment.GetEnvironmentVariable("AEROCOMPLIANCE_AI_MODE")?.Trim().ToLowerInvariant() is "yolo"
+    ? "yolo"
+    : "mock";
 var aiRequirements = aiMode == "yolo" ? "requirements-yolo.txt" : "requirements-geospatial.txt";
 
 // The .pt weights are large and are never copied into the image (.dockerignore excludes models/*.pt);

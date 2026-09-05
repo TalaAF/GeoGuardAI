@@ -23,6 +23,7 @@ import {
 import GeometryEditor from "../components/GeometryEditor";
 import GeoMap from "../components/GeoMap";
 import { EnforcementBadge } from "../components/ComplianceResults";
+import GisReferencePanel from "../components/GisReferencePanel";
 import { formatArea, totalAreaM2, type NormalizedMultiPolygon } from "../lib/geometry";
 
 type Tab = "zones" | "blocks" | "parcels" | "roads" | "zoning-rules";
@@ -279,6 +280,7 @@ export default function Gis() {
       />
       {error && <Notice kind="error">{error}</Notice>}
       {message && <Notice kind="success">{message}</Notice>}
+      <GisReferencePanel />
       <Card>
         <div className="tabs">
           {(

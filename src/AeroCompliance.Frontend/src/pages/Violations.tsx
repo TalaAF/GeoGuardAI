@@ -9,6 +9,7 @@ import {
   Notice,
   PageTitle,
   Pager,
+  SourceBadge,
   Spinner,
   Status,
   fmtDate,
@@ -105,6 +106,7 @@ export default function Violations() {
                     <th>Type</th>
                     <th>Flight</th>
                     <th>AI confidence</th>
+                    <th>Source</th>
                     <th>Status</th>
                     <th>Created</th>
                     <th />
@@ -118,6 +120,14 @@ export default function Violations() {
                       <td>{v.flightMissionName || "Untitled flight"}</td>
                       <td className="confidence">
                         {fmtPercent(v.aiConfidenceScore)}
+                      </td>
+                      <td>
+                        <div className="badge-stack">
+                          <SourceBadge resultSource={v.resultSource} />
+                          {v.isExperimental && (
+                            <span className="status status-under_review">Experimental</span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <Status value={v.status} />

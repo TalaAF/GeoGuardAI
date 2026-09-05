@@ -43,9 +43,13 @@ namespace AeroCompliance.ApiService.Controllers;
   x.ParcelId,x.Parcel?.ParcelNumber,x.RoadId,x.Road?.RoadCode,x.ZoneId,x.Zone?.ZoneNumber,x.BlockId,x.Block?.BlockNumber,x.RuleId,x.Rule?.RuleKey,
   x.EvidenceImageId,x.EvidenceImage?.StoragePath,
   x.StatusHistory.OrderBy(h=>h.ChangedAt).Select(h=>new ViolationHistoryDto(h.Status.Code,h.ChangedBy,h.Notes,h.ChangedAt)).ToList(),
-  x.CreatedAt,x.UpdatedAt);
+  x.CreatedAt,x.UpdatedAt,
+  // Provenance travels with the case so a reviewer sees how the geometry was obtained.
+  x.ResultSource,x.IsApproximate,x.IsExperimental,x.RequiresManualReview,
+  x.GeoreferencingConfidence,x.SourceGeoreferencingMethod,x.Detection.ClassId);
  private static System.Linq.Expressions.Expression<Func<Violation,ViolationSummaryDto>> SummaryExpr()=>x=>new(x.Id,x.ViolationType,x.CurrentStatus.Code,x.AiConfidenceScore,
   x.Detection.Image!=null?x.Detection.Image.FlightId:x.Detection.Orthomosaic!=null?x.Detection.Orthomosaic.FlightId:null,
   x.Detection.Image!=null?x.Detection.Image.Flight.MissionName:x.Detection.Orthomosaic!=null?x.Detection.Orthomosaic.Flight.MissionName:null,
-  x.CreatedAt,x.UpdatedAt);
+  x.CreatedAt,x.UpdatedAt,
+  x.ResultSource,x.IsApproximate,x.IsExperimental,x.RequiresManualReview);
 }

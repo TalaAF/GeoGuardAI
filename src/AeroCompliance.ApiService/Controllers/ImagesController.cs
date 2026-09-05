@@ -22,7 +22,50 @@ public sealed class ImagesController(AeroComplianceDbContext db, ICurrentUserCon
 
     [HttpGet("{id:guid}/processing-status")]
     public async Task<ActionResult<ImageProcessingStatusDto>> Status(Guid id, CancellationToken ct)
-    { var x = await Visible().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct); return x is null ? NotFound() : Ok(StatusMap(x)); }
+    {
+        var x = await Visible().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+        return x is null ? NotFound() : Ok(StatusMap(x) with { Analysis = await AnalysisSummary(id, ct) });
+    }
+
+    /// <summary>
+    /// What the latest analysis for this image actually produced. Model-only predictions are counted
+    /// separately from geographic ones: they are real detections that were deliberately left without
+    /// a map position, and reporting them together would hide the ROI restriction.
+    /// </summary>
+    private async Task<AnalysisSummaryDto?> AnalysisSummary(Guid imageId, CancellationToken ct)
+    {
+        var a = await db.ImageAnalyses.AsNoTracking().Where(x => x.ImageId == imageId)
+            .OrderByDescending(x => x.StartedAt).ThenByDescending(x => x.AttemptNumber).FirstOrDefaultAsync(ct);
+        if (a is null) return null;
+
+        var geographic = await db.Detections.AsNoTracking().CountAsync(d => d.ImageAnalysisId == a.Id, ct);
+        var candidates = await db.Violations.AsNoTracking()
+            .CountAsync(v => v.Detection.ImageAnalysisId == a.Id, ct);
+        var modelOnly = a.ModelOnlyDetectionCount;
+
+        // Only count an "outside ROI" skip when the raster actually declared a trusted region.
+        var roiRestricted = a.TrustedRoiRadiusM is > 0;
+        var outsideRoi = roiRestricted ? modelOnly : 0;
+
+        var geographicStatus = a.GeoreferencingStatus switch
+        {
+            "Estimated" => "Estimated",
+            null or "" => geographic > 0 ? "Validated" : "Missing",
+            _ => a.GeoreferencingStatus!,
+        };
+        var eligibility = a.GeoreferencingStatus == "Estimated" ? "ExperimentalOnly"
+            : geographic > 0 ? "Eligible" : "NotEligible";
+        var skipReason = modelOnly == 0 ? null
+            : roiRestricted
+                ? $"Geographic evaluation skipped for {modelOnly} detection(s) outside the trusted {a.TrustedRoiRadiusM:0.#} m region."
+                : $"{modelOnly} detection(s) had no usable raster georeferencing and were retained as model-only.";
+
+        return new AnalysisSummaryDto(a.Id, a.RequestId, a.Mode, a.Status, a.ModelName, a.ModelVersion,
+            geographic + modelOnly, geographic, modelOnly, outsideRoi, candidates,
+            geographicStatus, eligibility, skipReason,
+            a.GeoreferencingMethod, a.GeoreferencingConfidence, a.TrustedRoiRadiusM,
+            a.StartedAt, a.CompletedAt);
+    }
 
     [HttpPost("{id:guid}/retry-processing"), Authorize(Policy = Policies.ManageFlights)]
     public async Task<ActionResult<ImageProcessingStatusDto>> Retry(Guid id, CancellationToken ct)
