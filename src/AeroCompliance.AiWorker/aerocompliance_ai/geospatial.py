@@ -45,6 +45,79 @@ class RasterMetadata:
     affine_transform: list  # [a, b, c, d, e, f] — rasterio's Affine coefficients, row-major.
     bounds: tuple  # (left, bottom, right, top), in the raster's own CRS.
     resolution: tuple  # (pixel width, pixel height), in the raster's own CRS units.
+    tags: dict  # GeoTIFF metadata tags, carrying any experimental-georeferencing declaration.
+
+
+# Provenance values for a detection's geometry, so a consumer never has to guess how a coordinate
+# was obtained.
+SOURCE_REAL_YOLO_ESTIMATED = "RealYoloEstimatedGeometry"
+SOURCE_REAL_YOLO_MODEL_ONLY = "RealYoloModelOnly"
+SOURCE_MOCK_GEOGRAPHIC = "MockGeographicScenario"
+# Kept distinct from the estimated case: a genuinely surveyed raster must not be reported under a
+# label that says "estimated".
+SOURCE_REAL_YOLO_GEOREFERENCED = "RealYoloGeoreferencedGeometry"
+
+
+@dataclass(frozen=True)
+class ExperimentalPolicy:
+    """An approximate georeference that the raster itself declares, plus the region it is trusted in.
+
+    Read from the derivative's own GeoTIFF tags rather than from worker configuration, so the
+    restriction travels with the file: any raster without these tags is treated as a normal,
+    fully-trusted georeference and behaves exactly as before.
+    """
+
+    method: str
+    confidence: str
+    eligibility: str
+    anchor_x: Optional[float]
+    anchor_y: Optional[float]
+    roi_radius_m: Optional[float]
+    requires_manual_review: bool
+
+    @property
+    def has_roi(self) -> bool:
+        return (self.anchor_x is not None and self.anchor_y is not None
+                and self.roi_radius_m is not None and self.roi_radius_m > 0)
+
+    def contains(self, x: float, y: float) -> bool:
+        """True when a point in the raster's own CRS lies inside the trusted ROI."""
+        if not self.has_roi:
+            return True
+        return self.distance_from_anchor(x, y) <= self.roi_radius_m
+
+    def distance_from_anchor(self, x: float, y: float) -> Optional[float]:
+        if self.anchor_x is None or self.anchor_y is None:
+            return None
+        return ((x - self.anchor_x) ** 2 + (y - self.anchor_y) ** 2) ** 0.5
+
+
+def read_experimental_policy(tags: dict) -> Optional[ExperimentalPolicy]:
+    """Return the raster's declared experimental-georeferencing policy, or None if it declares none.
+
+    Only a raster explicitly tagged ``georeferencingStatus=Estimated`` is restricted. Anything else
+    -- including a properly surveyed GeoTIFF -- returns None and is processed unrestricted.
+    """
+    if not tags:
+        return None
+    if (tags.get("georeferencingStatus") or "").strip().lower() != "estimated":
+        return None
+
+    def number(key):
+        try:
+            return float(tags[key])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    return ExperimentalPolicy(
+        method=tags.get("provenance") or tags.get("georeferencingMethod") or "Estimated",
+        confidence=tags.get("georeferencingConfidence") or "Low",
+        eligibility=tags.get("geographicEvaluationEligible") or "ExperimentalOnly",
+        anchor_x=number("anchorEasting"),
+        anchor_y=number("anchorNorthing"),
+        roi_radius_m=number("trustedRoiRadiusMetres"),
+        requires_manual_review=(tags.get("requiresManualReview") or "true").strip().lower() != "false",
+    )
 
 
 def require_georeferencing(crs, affine) -> None:
@@ -94,7 +167,12 @@ def extract_raster_metadata(path: str) -> Optional[RasterMetadata]:
                 height=dataset.height,
                 affine_transform=coeffs,
                 bounds=bounds,
-                resolution=(abs(transform.a), abs(transform.e)),
+                # Column/row vector lengths, not |a| and |e|: those two coincide with pixel size
+                # only for an axis-aligned transform, and understate it once the affine carries a
+                # rotation in its b/d terms.
+                resolution=((transform.a ** 2 + transform.d ** 2) ** 0.5,
+                            (transform.b ** 2 + transform.e ** 2) ** 0.5),
+                tags=dict(dataset.tags() or {}),
             )
     except GeoreferencingError:
         raise

@@ -90,18 +90,57 @@ public sealed class AnalysisResultConsumer(IConnection connection, IServiceScope
         if (e.RasterWidth is not null) image.RasterWidth = e.RasterWidth;
         if (e.RasterHeight is not null) image.RasterHeight = e.RasterHeight;
         if (e.AffineTransform is not null) image.AffineTransform = e.AffineTransform;
+        // Phase 8: the raster's own declaration that its georeference is approximate, plus the real
+        // predictions the worker deliberately kept non-geographic. Both are recorded on the
+        // analysis so the run is self-describing without re-reading the raster.
+        ApplyGeoreferencingPolicy(analysis, e);
         image.ProcessingStatus=ImageProcessingStatus.EvaluatingCompliance; await db.SaveChangesAsync(ct);
         foreach (var item in e.Detections)
         {
             if (await db.Detections.AnyAsync(x => x.ImageAnalysisId == analysis.Id && x.ExternalDetectionId == item.DetectionId, ct)) continue;
             var geom=GeometryReader.Read(item.Geometry); var detection=new Detection { Id=Guid.NewGuid(),ImageAnalysisId=analysis.Id,ExternalDetectionId=item.DetectionId,ImageId=image.Id,
                 ClassId=item.ClassId,ClassLabel=item.ClassName,Confidence=item.Confidence,Geom=geom,ModelName=e.ModelName,ModelVersion=e.ModelVersion,CreatedAt=e.CompletedAt,
-                Image=image };
+                Image=image,
+                ResultSource=item.ResultSource,IsApproximate=item.IsApproximate,RequiresManualReview=item.RequiresManualReview,
+                GeoreferencingConfidence=item.GeoreferencingConfidence,SourceGeoreferencingMethod=item.SourceGeoreferencingMethod,
+                DistanceFromAnchorM=item.DistanceFromAnchorMetres };
             db.Detections.Add(detection); await db.SaveChangesAsync(ct); await Evaluate(db, notify, image.Flight.MunicipalityId, analysis, detection, ct);
         }
         analysis.Status="Completed";image.ProcessingStatus=ImageProcessingStatus.Completed;image.ProcessingCompletedAt=e.CompletedAt;image.LastErrorCode=null;image.LastErrorMessage=null;
         db.AuditLogs.Add(new AuditLog { Action="image.processing.completed",EntityType="Image",EntityId=image.Id,MunicipalityId=image.Flight.MunicipalityId,
-            AfterState=JsonSerializer.Serialize(new{analysisId=analysis.Id,detections=e.Detections.Count}),CreatedAt=DateTimeOffset.UtcNow });
+            AfterState=JsonSerializer.Serialize(new{analysisId=analysis.Id,detections=e.Detections.Count,
+                modelOnly=e.ModelOnlyCount,georeferencingStatus=analysis.GeoreferencingStatus}),CreatedAt=DateTimeOffset.UtcNow });
+    }
+
+    /// <summary>
+    /// Records the raster's approximate-georeference declaration and the retained model-only
+    /// predictions. Values are only ever written when present, so a retry that cannot re-derive
+    /// them never clears what an earlier attempt established.
+    /// </summary>
+    private static void ApplyGeoreferencingPolicy(ImageAnalysis analysis, ImageAnalysisCompleted e)
+    {
+        if (e.ModelOnlyDetections is not null) analysis.ModelOnlyDetections = e.ModelOnlyDetections;
+        if (e.ModelOnlyCount > 0) analysis.ModelOnlyDetectionCount = e.ModelOnlyCount;
+        if (e.GeoreferencingPolicy is null) return;
+        try
+        {
+            using var policy = JsonDocument.Parse(e.GeoreferencingPolicy);
+            var root = policy.RootElement;
+            analysis.GeoreferencingStatus = Text(root, "status");
+            analysis.GeoreferencingMethod = Text(root, "method");
+            analysis.GeoreferencingConfidence = Text(root, "confidence");
+            if (root.TryGetProperty("roiRadiusMetres", out var radius) &&
+                radius.ValueKind == JsonValueKind.Number) analysis.TrustedRoiRadiusM = radius.GetDouble();
+        }
+        catch (JsonException)
+        {
+            // A malformed policy must not fail an otherwise good analysis; the detections carry
+            // their own provenance regardless.
+            analysis.GeoreferencingStatus = "Unparseable";
+        }
+
+        static string? Text(JsonElement root, string name) =>
+            root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
     }
 
     private static async Task Failed(AeroComplianceDbContext db, INotificationService notify, ImageAnalysisFailed e, CancellationToken ct)
@@ -164,5 +203,26 @@ public sealed class AnalysisResultConsumer(IConnection connection, IServiceScope
     }
 
     private static async Task<(Guid Id,decimal Value)?> SpatialHit(NpgsqlConnection conn,string sql,Guid municipalityId,NetTopologySuite.Geometries.MultiPolygon geom,CancellationToken ct){await using var cmd=new NpgsqlCommand(sql,conn);cmd.Parameters.AddWithValue("m",municipalityId);cmd.Parameters.AddWithValue("g",NpgsqlDbType.Geometry,geom);await using var reader=await cmd.ExecuteReaderAsync(ct);if(!await reader.ReadAsync(ct))return null;return(reader.GetGuid(0),reader.IsDBNull(1)?0:Convert.ToDecimal(reader.GetDouble(1)));}
-    private static async Task AddViolation(AeroComplianceDbContext db,ImageAnalysis analysis,Detection detection,string type,Guid? roadId,Guid? parcelId,Guid? ruleId,decimal measured,CancellationToken ct){if(await db.ComplianceEvaluations.AnyAsync(x=>x.DetectionId==detection.Id&&x.EvaluationType==type,ct))return;var evaluation=new ComplianceEvaluation{Id=Guid.NewGuid(),ImageAnalysisId=analysis.Id,DetectionId=detection.Id,ZoningRuleId=ruleId,EvaluationType=type,MeasuredValue=measured,Unit="m2",Outcome="candidate_violation",MetricCrs=32636,CreatedAt=DateTimeOffset.UtcNow};db.ComplianceEvaluations.Add(evaluation);var violation=new Violation{Id=Guid.NewGuid(),ComplianceEvaluationId=evaluation.Id,DetectionId=detection.Id,ParcelId=parcelId,RoadId=roadId,RuleId=ruleId,ViolationType=type,ExceedanceAreaM2=measured,AiConfidenceScore=detection.Confidence,CurrentStatusId=1,Geom=detection.Geom,CreatedAt=DateTimeOffset.UtcNow,UpdatedAt=DateTimeOffset.UtcNow};db.Violations.Add(violation);db.ViolationStatusHistory.Add(new ViolationStatusHistory{Id=Guid.NewGuid(),ViolationId=violation.Id,StatusId=1,Notes="Created by automated compliance evaluation.",ChangedAt=DateTimeOffset.UtcNow});}
+    private static async Task AddViolation(AeroComplianceDbContext db,ImageAnalysis analysis,Detection detection,string type,Guid? roadId,Guid? parcelId,Guid? ruleId,decimal measured,CancellationToken ct)
+    {
+        if(await db.ComplianceEvaluations.AnyAsync(x=>x.DetectionId==detection.Id&&x.EvaluationType==type,ct))return;
+        var evaluation=new ComplianceEvaluation{Id=Guid.NewGuid(),ImageAnalysisId=analysis.Id,DetectionId=detection.Id,ZoningRuleId=ruleId,EvaluationType=type,MeasuredValue=measured,Unit="m2",Outcome="candidate_violation",MetricCrs=32636,CreatedAt=DateTimeOffset.UtcNow,
+            // The evaluation is exactly as reliable as the geometry it measured.
+            IsApproximate=detection.IsApproximate,RequiresManualReview=detection.RequiresManualReview,
+            GeoreferencingConfidence=detection.GeoreferencingConfidence,SourceGeoreferencingMethod=detection.SourceGeoreferencingMethod,
+            ResultSource=detection.ResultSource};
+        db.ComplianceEvaluations.Add(evaluation);
+        // Status 1 is the un-reviewed candidate state: nothing here ever auto-confirms a violation.
+        var violation=new Violation{Id=Guid.NewGuid(),ComplianceEvaluationId=evaluation.Id,DetectionId=detection.Id,ParcelId=parcelId,RoadId=roadId,RuleId=ruleId,ViolationType=type,ExceedanceAreaM2=measured,AiConfidenceScore=detection.Confidence,CurrentStatusId=1,Geom=detection.Geom,CreatedAt=DateTimeOffset.UtcNow,UpdatedAt=DateTimeOffset.UtcNow,
+            IsApproximate=detection.IsApproximate,
+            // An approximate geometry always needs a human, whatever the detection asked for.
+            RequiresManualReview=detection.RequiresManualReview||detection.IsApproximate,
+            GeoreferencingConfidence=detection.GeoreferencingConfidence,SourceGeoreferencingMethod=detection.SourceGeoreferencingMethod,
+            ResultSource=detection.ResultSource,IsExperimental=detection.IsApproximate};
+        db.Violations.Add(violation);
+        var note=detection.IsApproximate
+            ? $"Created by automated compliance evaluation from an ESTIMATED georeference ({detection.SourceGeoreferencingMethod}). Experimental candidate — requires manual review; not valid for enforcement."
+            : "Created by automated compliance evaluation.";
+        db.ViolationStatusHistory.Add(new ViolationStatusHistory{Id=Guid.NewGuid(),ViolationId=violation.Id,StatusId=1,Notes=note,ChangedAt=DateTimeOffset.UtcNow});
+    }
 }

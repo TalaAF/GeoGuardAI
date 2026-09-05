@@ -18,6 +18,13 @@ public sealed class ImageAnalysisConfiguration : IEntityTypeConfiguration<ImageA
         b.Property(x => x.StartedAt).HasColumnName("started_at"); b.Property(x => x.CompletedAt).HasColumnName("completed_at");
         b.Property(x => x.DurationMs).HasColumnName("duration_ms"); b.Property(x => x.FailureCode).HasColumnName("failure_code").HasMaxLength(100);
         b.Property(x => x.FailureMessage).HasColumnName("failure_message").HasMaxLength(1000);
+        // Phase 8: approximate-georeference declaration + retained non-geographic predictions.
+        b.Property(x => x.GeoreferencingStatus).HasColumnName("georeferencing_status").HasMaxLength(30);
+        b.Property(x => x.GeoreferencingMethod).HasColumnName("georeferencing_method").HasMaxLength(100);
+        b.Property(x => x.GeoreferencingConfidence).HasColumnName("georeferencing_confidence").HasMaxLength(30);
+        b.Property(x => x.TrustedRoiRadiusM).HasColumnName("trusted_roi_radius_m");
+        b.Property(x => x.ModelOnlyDetections).HasColumnName("model_only_detections").HasColumnType("jsonb");
+        b.Property(x => x.ModelOnlyDetectionCount).HasColumnName("model_only_detection_count").HasDefaultValue(0);
         b.HasIndex(x => x.RequestId).IsUnique(); b.HasIndex(x => x.ImageId);
         b.HasOne(x => x.Image).WithMany(x => x.Analyses).HasForeignKey(x => x.ImageId).OnDelete(DeleteBehavior.Cascade);
     }
@@ -58,6 +65,12 @@ public sealed class ComplianceEvaluationConfiguration : IEntityTypeConfiguration
         b.Property(x => x.MeasuredValue).HasColumnName("measured_value").HasColumnType("numeric(14,3)"); b.Property(x => x.RequiredValue).HasColumnName("required_value").HasColumnType("numeric(14,3)");
         b.Property(x => x.Unit).HasColumnName("unit").HasMaxLength(20); b.Property(x => x.Outcome).HasColumnName("outcome").HasMaxLength(30);
         b.Property(x => x.MetricCrs).HasColumnName("metric_crs"); b.Property(x => x.CreatedAt).HasColumnName("created_at");
+        // Phase 8: reliability inherited from the evaluated detection.
+        b.Property(x => x.IsApproximate).HasColumnName("is_approximate").HasDefaultValue(false);
+        b.Property(x => x.RequiresManualReview).HasColumnName("requires_manual_review").HasDefaultValue(false);
+        b.Property(x => x.GeoreferencingConfidence).HasColumnName("georeferencing_confidence").HasMaxLength(30);
+        b.Property(x => x.SourceGeoreferencingMethod).HasColumnName("source_georeferencing_method").HasMaxLength(100);
+        b.Property(x => x.ResultSource).HasColumnName("result_source").HasMaxLength(50);
         b.HasIndex(x => new { x.DetectionId, x.EvaluationType }).IsUnique();
         b.HasOne(x => x.ImageAnalysis).WithMany().HasForeignKey(x => x.ImageAnalysisId).OnDelete(DeleteBehavior.Cascade);
         b.HasOne(x => x.Detection).WithMany(x => x.ComplianceEvaluations).HasForeignKey(x => x.DetectionId).OnDelete(DeleteBehavior.Cascade);

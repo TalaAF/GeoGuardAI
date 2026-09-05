@@ -16,5 +16,15 @@ public class ComplianceEvaluation
     public string Outcome { get; set; } = null!;
     public int MetricCrs { get; set; } = 32636;
     public DateTimeOffset CreatedAt { get; set; }
+    /// <summary>
+    /// Phase 8 — provenance inherited from the evaluated detection, so an evaluation carries its
+    /// own reliability rather than requiring a join to discover it.
+    /// </summary>
+    public bool IsApproximate { get; set; }
+    public bool RequiresManualReview { get; set; }
+    public string? GeoreferencingConfidence { get; set; }
+    public string? SourceGeoreferencingMethod { get; set; }
+    public string? ResultSource { get; set; }
+
     public Violation? Violation { get; set; }
 }

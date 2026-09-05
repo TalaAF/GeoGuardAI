@@ -18,7 +18,13 @@ public sealed record ImageAnalysisStarted(
     decimal ConfidenceThreshold, DateTimeOffset StartedAt);
 
 public sealed record AnalysisDetection(
-    Guid DetectionId, int ClassId, string ClassName, decimal Confidence, JsonElement Geometry);
+    Guid DetectionId, int ClassId, string ClassName, decimal Confidence, JsonElement Geometry,
+    // Phase 8 (additive, optional): provenance of this detection's geometry. Defaults keep the
+    // pre-existing behaviour for any producer that does not send them — a detection with no
+    // provenance is treated as exact, not approximate.
+    string? ResultSource = null, bool IsApproximate = false, bool RequiresManualReview = false,
+    string? GeoreferencingConfidence = null, string? SourceGeoreferencingMethod = null,
+    double? DistanceFromAnchorMetres = null);
 
 public sealed record ImageAnalysisCompleted(
     Guid EventId, int SchemaVersion, Guid CorrelationId, Guid? CausationId, DateTimeOffset OccurredAt,
@@ -28,7 +34,11 @@ public sealed record ImageAnalysisCompleted(
     // Phase 5 (additive, optional): raster georeferencing the AI Worker read via rasterio when the
     // uploaded file was a GeoTIFF and the raster-capable build is running. Null whenever the source
     // wasn't a raster, or the worker's lightweight (mock-only) build has no rasterio installed.
-    int? RasterWidth = null, int? RasterHeight = null, string? AffineTransform = null);
+    int? RasterWidth = null, int? RasterHeight = null, string? AffineTransform = null,
+    // Phase 8 (additive, optional): real predictions the worker deliberately left non-geographic
+    // (outside a trusted ROI, or an ungeoreferenced raster), plus the raster's own declaration that
+    // its georeference is approximate. Reported so nothing the model saw is silently discarded.
+    string? ModelOnlyDetections = null, int ModelOnlyCount = 0, string? GeoreferencingPolicy = null);
 
 public sealed record ImageAnalysisFailed(
     Guid EventId, int SchemaVersion, Guid CorrelationId, Guid? CausationId, DateTimeOffset OccurredAt,

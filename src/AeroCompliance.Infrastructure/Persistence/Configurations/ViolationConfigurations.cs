@@ -29,6 +29,13 @@ public class DetectionConfiguration : IEntityTypeConfiguration<Detection>
         b.Property(x => x.ModelName).HasColumnName("model_name").HasMaxLength(100).IsRequired();
         b.Property(x => x.ModelVersion).HasColumnName("model_version").HasMaxLength(50).IsRequired();
         b.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+        // Phase 8: geometry provenance, so an estimated position is never mistaken for a surveyed one.
+        b.Property(x => x.ResultSource).HasColumnName("result_source").HasMaxLength(50);
+        b.Property(x => x.IsApproximate).HasColumnName("is_approximate").HasDefaultValue(false);
+        b.Property(x => x.RequiresManualReview).HasColumnName("requires_manual_review").HasDefaultValue(false);
+        b.Property(x => x.GeoreferencingConfidence).HasColumnName("georeferencing_confidence").HasMaxLength(30);
+        b.Property(x => x.SourceGeoreferencingMethod).HasColumnName("source_georeferencing_method").HasMaxLength(100);
+        b.Property(x => x.DistanceFromAnchorM).HasColumnName("distance_from_anchor_m");
 
         b.HasIndex(x => x.Geom).HasMethod("gist");
         b.HasIndex(x => x.ClassLabel);
@@ -102,6 +109,13 @@ public class ViolationConfiguration : IEntityTypeConfiguration<Violation>
         b.Property(x => x.Geom).HasColumnName("geom").HasColumnType("geometry(MultiPolygon, 4326)").IsRequired();
         b.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
         b.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
+        // Phase 8: an experimental violation must be visibly experimental everywhere it surfaces.
+        b.Property(x => x.IsApproximate).HasColumnName("is_approximate").HasDefaultValue(false);
+        b.Property(x => x.RequiresManualReview).HasColumnName("requires_manual_review").HasDefaultValue(false);
+        b.Property(x => x.IsExperimental).HasColumnName("is_experimental").HasDefaultValue(false);
+        b.Property(x => x.GeoreferencingConfidence).HasColumnName("georeferencing_confidence").HasMaxLength(30);
+        b.Property(x => x.SourceGeoreferencingMethod).HasColumnName("source_georeferencing_method").HasMaxLength(100);
+        b.Property(x => x.ResultSource).HasColumnName("result_source").HasMaxLength(50);
 
         b.HasIndex(x => x.Geom).HasMethod("gist");
         b.HasIndex(x => x.CurrentStatusId);

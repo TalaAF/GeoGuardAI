@@ -1,4 +1,4 @@
-import hashlib, json, os, tempfile, threading, time, uuid
+import hashlib, json, os, tempfile, threading, time, traceback, uuid
 from datetime import datetime, timezone
 from flask import Flask, jsonify
 from minio import Minio
@@ -30,7 +30,14 @@ class Worker:
             if any(not request.get(k) for k in required): raise ModelFailure("MALFORMED_REQUEST","Required request fields are missing.")
             base={"schemaVersion":1,"correlationId":request["correlationId"],"causationId":request["eventId"],"occurredAt":started_at,"requestId":request["requestId"],"imageId":request["imageId"],"attempt":1}
             self.publish(ch,STARTED_KEY,{**base,"eventId":str(uuid.uuid5(uuid.UUID(request["requestId"]),"started")),"mode":self.s.mode,"modelName":self.s.model_name,"modelVersion":self.s.model_version,"confidenceThreshold":self.s.threshold,"startedAt":started_at})
-            with tempfile.NamedTemporaryFile(delete=False) as temp: path=temp.name
+            # Preserve the object's file extension on the temp file. Ultralytics resolves an
+            # image's format from its suffix before reading any bytes, so an extensionless
+            # download is rejected outright even though the content is a valid raster.
+            suffix=os.path.splitext(request.get("objectKey") or "")[1].lower()
+            if suffix not in (".tif",".tiff",".png",".jpg",".jpeg"):
+                suffix={"image/tiff":".tif","image/geotiff":".tif","image/png":".png","image/jpeg":".jpg"}.get(
+                    (request.get("contentType") or "").lower(), ".tif")
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp: path=temp.name
             try:
                 self.minio.fget_object(request["bucket"],request["objectKey"],path)
                 digest=hashlib.sha256()
@@ -41,16 +48,28 @@ class Worker:
                 # missing/invalid raster here never fails *mock* processing (mock doesn't need it) —
                 # AI_MODE=yolo's own runner.analyze() call below separately (and fatally) requires it.
                 raster=self._extract_raster_metadata(request,path)
-                detections=self.runner.analyze(request,path); completed_at=utcnow()
+                outcome=self.runner.analyze(request,path); completed_at=utcnow()
                 self.publish(ch,COMPLETED_KEY,{**base,"eventId":str(uuid.uuid5(uuid.UUID(request["requestId"]),"completed")),"occurredAt":completed_at,"mode":self.s.mode,"modelName":self.s.model_name,"modelVersion":self.s.model_version,"confidenceThreshold":self.s.threshold,
-                    "sourceCrs":raster.crs if raster else None,"outputCrs":"EPSG:4326","startedAt":started_at,"completedAt":completed_at,"durationMs":int((time.monotonic()-started_clock)*1000),"detections":detections,
+                    "sourceCrs":raster.crs if raster else None,"outputCrs":"EPSG:4326","startedAt":started_at,"completedAt":completed_at,"durationMs":int((time.monotonic()-started_clock)*1000),"detections":outcome.detections,
                     "rasterWidth":raster.width if raster else None,"rasterHeight":raster.height if raster else None,
-                    "affineTransform":json.dumps(raster.affine_transform) if raster else None})
+                    "affineTransform":json.dumps(raster.affine_transform) if raster else None,
+                    # Real predictions deliberately kept non-geographic (outside a trusted ROI, or an
+                    # ungeoreferenced raster). Reported so nothing the model saw is silently dropped.
+                    "modelOnlyDetections":json.dumps(outcome.model_only) if outcome.model_only else None,
+                    "modelOnlyCount":len(outcome.model_only),
+                    "georeferencingPolicy":json.dumps(outcome.georeferencing) if outcome.georeferencing else None})
             finally:
                 if os.path.exists(path): os.remove(path)
             ch.basic_ack(method.delivery_tag)
         except Exception as exc:
             code=exc.code if isinstance(exc,ModelFailure) else "AI_WORKER_ERROR"; message=str(exc)[:500] if isinstance(exc,ModelFailure) else "AI processing failed safely."
+            # The event keeps a deliberately generic message (it crosses a trust boundary), but the
+            # worker's own log needs the real cause — otherwise an operator sees only
+            # "failed safely" and has nothing to debug.
+            if not isinstance(exc, ModelFailure):
+                print(f"unhandled analysis error for image {(request or {}).get('imageId')}: "
+                      f"{type(exc).__name__}: {exc}", flush=True)
+                traceback.print_exc()
             if request and request.get("requestId") and request.get("imageId"):
                 failed_at=utcnow(); base={"schemaVersion":1,"correlationId":request.get("correlationId",request["requestId"]),"causationId":request.get("eventId"),"occurredAt":failed_at,"requestId":request["requestId"],"imageId":request["imageId"],"attempt":1}
                 self.publish(ch,FAILED_KEY,{**base,"eventId":str(uuid.uuid5(uuid.UUID(request["requestId"]),"failed")),"stage":"analysis","errorCode":code,"message":message,"retryable":code not in ("MALFORMED_REQUEST","MISSING_CAPTURE_COORDINATES"),"failedAt":failed_at})

@@ -96,18 +96,44 @@ model has no segmentation head) into an `EPSG:4326` `MultiPolygon` via
 `geospatial.polygon_pixels_to_wgs84` / `build_multipolygon_geojson`, then returns detections in the
 exact shape `MockModelRunner` already produces — so no .NET contract changes are needed to switch.
 
-**This has not been run against a real model or a real drone GeoTIFF in this workspace** — there is
-no `.pt` file and no representative production GeoTIFF here. The georeferencing/conversion path it
-depends on (`geospatial.py`) has been verified directly (see above); `YoloModelRunner`'s own model
-loading and inference call have not. Treat it as structurally complete but functionally unverified
-until a teammate exercises it end to end with a real model and a real image. Remaining steps for that
-handoff:
+**Status: the real model is now integrated and has been run.** `models/best.pt`
+(sha256 `577ec6f619b5e22a462b0ac62d5a55722cded832ea07fbaf70f01d93786479f8`) was inspected and
+executed against the supplied validation imagery. Verified facts, taken from the checkpoint itself
+rather than the training notes:
 
-1. Build the `yolo` profile: `--build-arg AI_REQUIREMENTS=requirements-yolo.txt`.
-2. Mount/copy the trained `.pt` file to the path in `AI_MODEL_PATH` (default `/models/model.pt`).
-3. Set `AI_MODE=yolo` on the `aiworker` resource (`AppHost.cs`), plus `AI_CONFIDENCE_THRESHOLD` /
-   `AI_MODEL_NAME` / `AI_MODEL_VERSION` as needed.
-4. Confirm class IDs/names match what `ProcessingService.Evaluate` expects (`"building"` or
-   `"violation"` today — extend that check for more classes).
-5. Upload a real, representative georeferenced GeoTIFF and confirm `GET /api/detections` /
-   `GET /api/violations` show real output, not just that the pipeline didn't crash.
+| Property | Verified value |
+|---|---|
+| Task | `segment` |
+| Classes | `{0: "building", 1: "road"}` — **two**, not three |
+| Base model | `yolo26m-seg`, trained at `imgsz=1024`, 200 epochs |
+| Saved by | Ultralytics `8.4.131` |
+
+Two corrections this surfaced:
+
+* `GeoDemoGuardai/Models/model_info.json` and `data.yaml` both claim a third `violation` class.
+  The shipped weights do not contain it. Anything relying on class id `2` would never fire.
+* The `Segment26` head requires **ultralytics >= 8.4.131**; on the 8.3.x line the checkpoint fails
+  to load with `Can't get attribute 'Segment26'`. `requirements-yolo.txt` pins the floor accordingly.
+
+### Georeferencing policy
+
+`YoloModelRunner` emits geographic geometry only when the source raster genuinely carries a CRS and
+affine transform. For a raster without them the model still runs — the detection count and class
+names are real and are logged — but **no geometry is produced and nothing is persisted**, because
+converting pixels to latitude/longitude without a transform would fabricate location data. Such an
+image completes successfully with zero geographic detections rather than failing.
+
+This matters for the currently supplied validation set: none of the 15 images carries
+georeferencing (`ramallah_28191_new.tif` has no GeoTIFF tags at all despite its name), so real
+geographic end-to-end processing cannot be demonstrated with them. A genuinely georeferenced
+GeoTIFF covering the Ramallah GIS extent is the one missing input.
+
+### Running it
+
+1. Build the `yolo` profile: `--build-arg AI_REQUIREMENTS=requirements-yolo.txt`. The Dockerfile
+   installs CPU-only PyTorch from PyTorch's CPU wheel index — no CUDA is required or pulled — plus
+   the OpenCV runtime libraries ultralytics links against.
+2. The `.pt` file is **never copied into the image** (`.dockerignore` excludes `models/*.pt`);
+   AppHost bind-mounts it read-only at `/models/best.pt`.
+3. `AppHost.cs` selects `AI_MODE=yolo` by default; set `AEROCOMPLIANCE_AI_MODE=mock` to fall back
+   to the deterministic mock without editing code.

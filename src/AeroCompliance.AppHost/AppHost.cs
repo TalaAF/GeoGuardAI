@@ -69,21 +69,31 @@ builder.AddProject<Projects.AeroCompliance_ProcessingService>("processingservice
     .WithReference(rabbitmq).WaitFor(rabbitmq)
     .WaitFor(apiService);
 
-builder.AddContainer("aiworker", "aerocompliance-ai-worker")
+// AI Worker mode is chosen at launch, not baked in:
+//   AI_MODE=yolo (default here) runs the real model from the read-only mount below;
+//   set AEROCOMPLIANCE_AI_MODE=mock to fall back to the deterministic mock without a rebuild.
+// The dependency profile must match: real inference needs the ultralytics/PyTorch profile.
+var aiMode = Environment.GetEnvironmentVariable("AEROCOMPLIANCE_AI_MODE")?.Trim().ToLowerInvariant() is "mock"
+    ? "mock"
+    : "yolo";
+var aiRequirements = aiMode == "yolo" ? "requirements-yolo.txt" : "requirements-geospatial.txt";
+
+// The .pt weights are large and are never copied into the image (.dockerignore excludes models/*.pt);
+// they are bind-mounted read-only from the developer's checkout instead.
+var modelHostPath = Path.GetFullPath(
+    Path.Combine(builder.AppHostDirectory, "..", "AeroCompliance.AiWorker", "models", "best.pt"));
+
+var aiWorker = builder.AddContainer("aiworker", "aerocompliance-ai-worker")
     .WithDockerfile("../AeroCompliance.AiWorker")
-    // "geospatial" profile (rasterio/shapely/pyproj, no ultralytics/PyTorch) so a normal local run
-    // can read GeoTIFF georeferencing without pulling in the much larger YOLO/PyTorch stack. This is
-    // independent of AI_MODE below, which is what actually selects mock vs. real inference — switch
-    // this build arg to "requirements.txt" for a smaller/faster core-only image (no GeoTIFF metadata
-    // extraction), or "requirements-yolo.txt" once a real model is being tested (see the AI Worker
-    // README's "Dependency profiles" section).
-    .WithBuildArg("AI_REQUIREMENTS", "requirements-geospatial.txt")
+    .WithBuildArg("AI_REQUIREMENTS", aiRequirements)
     .WithReference(rabbitmq)
-    .WithEnvironment("AI_MODE", "mock")
-    .WithEnvironment("AI_MODEL_PATH", "/models/model.pt")
-    .WithEnvironment("AI_CONFIDENCE_THRESHOLD", "0.50")
-    .WithEnvironment("AI_MODEL_NAME", "aerocompliance-mock")
-    .WithEnvironment("AI_MODEL_VERSION", "1.0")
+    .WithEnvironment("AI_MODE", aiMode)
+    .WithEnvironment("AI_MODEL_PATH", "/models/best.pt")
+    // Verified from the checkpoint itself: yolo26m-seg segmentation head, classes {0:building,
+    // 1:road}. The training notes' third "violation" class is not present in the shipped weights.
+    .WithEnvironment("AI_CONFIDENCE_THRESHOLD", "0.25")
+    .WithEnvironment("AI_MODEL_NAME", aiMode == "yolo" ? "yolo26m-seg-aerocompliance" : "aerocompliance-mock")
+    .WithEnvironment("AI_MODEL_VERSION", aiMode == "yolo" ? "2026-08-27" : "1.0")
     .WithEnvironment("MINIO_ENDPOINT", minioS3Endpoint)
     .WithEnvironment("MINIO_ACCESS_KEY", minioRootUser)
     .WithEnvironment("MINIO_SECRET_KEY", minioRootPassword)
@@ -93,6 +103,19 @@ builder.AddContainer("aiworker", "aerocompliance-ai-worker")
     .WithHttpHealthCheck("/ready")
     .WaitFor(rabbitmq)
     .WaitFor(minio);
+
+// Read-only mount of the real weights. Absent on a machine without the model, in which case the
+// worker is left in mock mode rather than starting a YOLO container that cannot load anything.
+if (File.Exists(modelHostPath))
+{
+    aiWorker.WithBindMount(modelHostPath, "/models/best.pt", isReadOnly: true);
+}
+else if (aiMode == "yolo")
+{
+    throw new InvalidOperationException(
+        $"AI_MODE=yolo was selected but no model file exists at {modelHostPath}. " +
+        "Place the .pt weights there, or set AEROCOMPLIANCE_AI_MODE=mock.");
+}
 
 builder.AddContainer("frontend", "aerocompliance-frontend")
     .WithDockerfile("../AeroCompliance.Frontend")

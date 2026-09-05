@@ -40,5 +40,31 @@ public class Detection
     public string ModelVersion { get; set; } = null!;
     public DateTimeOffset CreatedAt { get; set; }
 
+    /// <summary>
+    /// Phase 8 — geometry provenance. <see cref="Geom"/> alone cannot say how a coordinate was
+    /// obtained, and an approximate georeference must never be mistaken for a surveyed one.
+    /// Defaults describe the pre-existing exact case, so untouched rows keep their meaning.
+    /// </summary>
+    /// <remarks>
+    /// RealYoloEstimatedGeometry | RealYoloGeoreferencedGeometry | RealYoloModelOnly |
+    /// MockGeographicScenario | ImportedGisReference
+    /// </remarks>
+    public string? ResultSource { get; set; }
+
+    /// <summary>Geometry came from an estimated transform; positions are indicative only.</summary>
+    public bool IsApproximate { get; set; }
+
+    /// <summary>No downstream decision may be treated as final without a human check.</summary>
+    public bool RequiresManualReview { get; set; }
+
+    /// <summary>Low | Deterministic | Surveyed | NotGeoreferenced.</summary>
+    public string? GeoreferencingConfidence { get; set; }
+
+    /// <summary>e.g. EstimatedFromSingleAnchorAndOsm.</summary>
+    public string? SourceGeoreferencingMethod { get; set; }
+
+    /// <summary>Distance from the trusted-ROI anchor, when an ROI restriction applied.</summary>
+    public double? DistanceFromAnchorM { get; set; }
+
     public ICollection<ComplianceEvaluation> ComplianceEvaluations { get; set; } = new List<ComplianceEvaluation>();
 }

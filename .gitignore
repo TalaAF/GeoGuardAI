@@ -21,3 +21,12 @@ dist/
 
 # Local AI model weights (keep intentionally versioned fixtures elsewhere unaffected)
 src/AeroCompliance.AiWorker/models/*.pt
+
+# --- Real-data integration: local-only artifacts -------------------------------
+# Large/real inputs and derived outputs stay on the developer's machine. Source code,
+# migrations, import tooling, manual validation scripts, README and .env.example are NOT ignored.
+.local-data/
+**/models/*.pt
+.env
+__pycache__/
+*.pyc

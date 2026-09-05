@@ -81,6 +81,14 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+// Development-only GIS import CLI. Runs instead of the web host when invoked as
+//   dotnet run --project src/AeroCompliance.ApiService -- import-gis <dir> [--dry-run]
+// so it never affects normal service startup.
+if (GisImportCommand.Matches(args))
+{
+    return await GisImportCommand.RunAsync(args, app.Services, app.Environment);
+}
+
 // Dev convenience: apply migrations on startup so `dotnet run` yields a ready database.
 // ApiService is the sole migration owner (IngestionService doesn't touch the schema). In
 // non-dev environments, run migrations as a deliberate deploy step instead — and pre-provision
@@ -129,6 +137,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+return 0;
 
 // Exposes the generated top-level Program type to WebApplicationFactory integration tests.
 public partial class Program;

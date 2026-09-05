@@ -59,6 +59,23 @@ public class Violation
     /// <summary>Snapshot of the detection geometry at record time, MultiPolygon SRID 4326.</summary>
     public MultiPolygon Geom { get; set; } = null!;
 
+    /// <summary>
+    /// Phase 8 — reliability of the geometry this violation rests on. A violation derived from an
+    /// estimated georeference is experimental evidence, not an enforceable finding: it must be
+    /// presented as approximate and can never be auto-confirmed.
+    /// </summary>
+    public bool IsApproximate { get; set; }
+    public bool RequiresManualReview { get; set; }
+    public string? GeoreferencingConfidence { get; set; }
+    public string? SourceGeoreferencingMethod { get; set; }
+    public string? ResultSource { get; set; }
+
+    /// <summary>
+    /// Set when this violation may only be used for experimentation — never for enforcement,
+    /// cadastral, surveying or legal purposes.
+    /// </summary>
+    public bool IsExperimental { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 

@@ -25,6 +25,7 @@ public class AeroComplianceDbContext(DbContextOptions<AeroComplianceDbContext> o
     public DbSet<Parcel> Parcels => Set<Parcel>();
     public DbSet<Road> Roads => Set<Road>();
     public DbSet<ZoningRule> ZoningRules => Set<ZoningRule>();
+    public DbSet<GisReferenceFeature> GisReferenceFeatures => Set<GisReferenceFeature>();
 
     // Flights & media
     public DbSet<Flight> Flights => Set<Flight>();

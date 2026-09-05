@@ -107,7 +107,14 @@ public static class ComplianceRuleEngine
                     Unit = definition.Unit,
                     Outcome = outcome,
                     MetricCrs = 32636,
-                    CreatedAt = DateTimeOffset.UtcNow
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    // An evaluation is exactly as reliable as the geometry it measured: a measurement
+                    // taken from an estimated georeference must never present as a surveyed one.
+                    IsApproximate = detection.IsApproximate,
+                    RequiresManualReview = detection.RequiresManualReview,
+                    GeoreferencingConfidence = detection.GeoreferencingConfidence,
+                    SourceGeoreferencingMethod = detection.SourceGeoreferencingMethod,
+                    ResultSource = detection.ResultSource
                 };
                 db.ComplianceEvaluations.Add(evaluation);
             }
@@ -119,6 +126,12 @@ public static class ComplianceRuleEngine
                 evaluation.Unit = definition.Unit;
                 evaluation.MetricCrs = 32636;
                 if (evaluation.ZoningRuleId is null) evaluation.ZoningRuleId = rule.Id;
+                // A re-measure inherits the current detection's provenance too.
+                evaluation.IsApproximate = detection.IsApproximate;
+                evaluation.RequiresManualReview = detection.RequiresManualReview;
+                evaluation.GeoreferencingConfidence = detection.GeoreferencingConfidence;
+                evaluation.SourceGeoreferencingMethod = detection.SourceGeoreferencingMethod;
+                evaluation.ResultSource = detection.ResultSource;
             }
 
             Guid? violationId = evaluation.Violation?.Id;
@@ -147,7 +160,14 @@ public static class ComplianceRuleEngine
                     CurrentStatusId = 1, // under_review — never auto-confirmed.
                     Geom = detection.Geom,
                     CreatedAt = DateTimeOffset.UtcNow,
-                    UpdatedAt = DateTimeOffset.UtcNow
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    IsApproximate = detection.IsApproximate,
+                    // Approximate geometry always needs a human, whatever the detection asked for.
+                    RequiresManualReview = detection.RequiresManualReview || detection.IsApproximate,
+                    GeoreferencingConfidence = detection.GeoreferencingConfidence,
+                    SourceGeoreferencingMethod = detection.SourceGeoreferencingMethod,
+                    ResultSource = detection.ResultSource,
+                    IsExperimental = detection.IsApproximate
                 };
                 db.Violations.Add(violation);
                 db.ViolationStatusHistory.Add(new ViolationStatusHistory
@@ -155,7 +175,9 @@ public static class ComplianceRuleEngine
                     Id = Guid.NewGuid(),
                     ViolationId = violation.Id,
                     StatusId = 1,
-                    Notes = $"Raised automatically by the zoning-rule engine: {explanation}",
+                    Notes = detection.IsApproximate
+                        ? $"Raised automatically by the zoning-rule engine from an ESTIMATED georeference ({detection.SourceGeoreferencingMethod}). Experimental candidate — requires manual review; not valid for enforcement. {explanation}"
+                        : $"Raised automatically by the zoning-rule engine: {explanation}",
                     ChangedAt = DateTimeOffset.UtcNow
                 });
                 violationId = violation.Id;

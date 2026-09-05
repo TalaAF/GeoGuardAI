@@ -19,5 +19,22 @@ public class ImageAnalysis
     public long? DurationMs { get; set; }
     public string? FailureCode { get; set; }
     public string? FailureMessage { get; set; }
+    /// <summary>
+    /// Phase 8 — the raster's own declaration that its georeference is approximate, and the region
+    /// it is trusted in. Null for a normal, fully-trusted raster.
+    /// </summary>
+    public string? GeoreferencingStatus { get; set; }
+    public string? GeoreferencingMethod { get; set; }
+    public string? GeoreferencingConfidence { get; set; }
+    public double? TrustedRoiRadiusM { get; set; }
+
+    /// <summary>
+    /// Real predictions deliberately left non-geographic (outside the trusted ROI, or a raster with
+    /// no usable transform), as a JSON array. Retained rather than discarded so an operator can see
+    /// everything the model saw; these are NOT detections and are never evaluated for compliance.
+    /// </summary>
+    public string? ModelOnlyDetections { get; set; }
+    public int ModelOnlyDetectionCount { get; set; }
+
     public ICollection<Detection> Detections { get; set; } = new List<Detection>();
 }
