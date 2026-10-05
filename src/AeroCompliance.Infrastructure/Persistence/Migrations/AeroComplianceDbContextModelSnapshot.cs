@@ -73,9 +73,15 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasColumnType("inet")
                         .HasColumnName("ip_address");
 
+                    b.Property<Guid?>("MunicipalityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("municipality_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ActorId");
+
+                    b.HasIndex("MunicipalityId");
 
                     b.HasIndex("EntityType", "EntityId");
 
@@ -123,6 +129,98 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.ToTable("blocks", (string)null);
                 });
 
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.ComplianceEvaluation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DetectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("detection_id");
+
+                    b.Property<string>("EvaluationType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("evaluation_type");
+
+                    b.Property<string>("GeoreferencingConfidence")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("georeferencing_confidence");
+
+                    b.Property<Guid>("ImageAnalysisId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("image_analysis_id");
+
+                    b.Property<bool>("IsApproximate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_approximate");
+
+                    b.Property<decimal?>("MeasuredValue")
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("measured_value");
+
+                    b.Property<int>("MetricCrs")
+                        .HasColumnType("integer")
+                        .HasColumnName("metric_crs");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("outcome");
+
+                    b.Property<decimal?>("RequiredValue")
+                        .HasColumnType("numeric(14,3)")
+                        .HasColumnName("required_value");
+
+                    b.Property<bool>("RequiresManualReview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("requires_manual_review");
+
+                    b.Property<string>("ResultSource")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("result_source");
+
+                    b.Property<string>("SourceGeoreferencingMethod")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("source_georeferencing_method");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("unit");
+
+                    b.Property<Guid?>("ZoningRuleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("zoning_rule_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImageAnalysisId");
+
+                    b.HasIndex("ZoningRuleId");
+
+                    b.HasIndex("DetectionId", "EvaluationType")
+                        .IsUnique();
+
+                    b.ToTable("compliance_evaluations", (string)null);
+                });
+
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Detection", b =>
                 {
                     b.Property<Guid>("Id")
@@ -134,6 +232,10 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("AreaM2")
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("area_m2");
+
+                    b.Property<int?>("ClassId")
+                        .HasColumnType("integer")
+                        .HasColumnName("class_id");
 
                     b.Property<string>("ClassLabel")
                         .IsRequired()
@@ -151,18 +253,41 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<double?>("DistanceFromAnchorM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("distance_from_anchor_m");
+
+                    b.Property<Guid?>("ExternalDetectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("external_detection_id");
+
                     b.Property<MultiPolygon>("Geom")
                         .IsRequired()
                         .HasColumnType("geometry(MultiPolygon, 4326)")
                         .HasColumnName("geom");
 
+                    b.Property<string>("GeoreferencingConfidence")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("georeferencing_confidence");
+
                     b.Property<decimal?>("HeightM")
                         .HasColumnType("numeric(8,2)")
                         .HasColumnName("height_m");
 
+                    b.Property<Guid?>("ImageAnalysisId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("image_analysis_id");
+
                     b.Property<Guid?>("ImageId")
                         .HasColumnType("uuid")
                         .HasColumnName("image_id");
+
+                    b.Property<bool>("IsApproximate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_approximate");
 
                     b.Property<string>("ModelName")
                         .IsRequired()
@@ -184,6 +309,22 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("perimeter_m");
 
+                    b.Property<bool>("RequiresManualReview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("requires_manual_review");
+
+                    b.Property<string>("ResultSource")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("result_source");
+
+                    b.Property<string>("SourceGeoreferencingMethod")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("source_georeferencing_method");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ClassLabel");
@@ -195,6 +336,9 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.HasIndex("ImageId");
 
                     b.HasIndex("OrthomosaicId");
+
+                    b.HasIndex("ImageAnalysisId", "ExternalDetectionId")
+                        .IsUnique();
 
                     b.ToTable("detections", null, t =>
                         {
@@ -314,6 +458,91 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.ToTable("flight_missions", (string)null);
                 });
 
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.GisReferenceFeature", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<double?>("AreaM2")
+                        .HasColumnType("double precision")
+                        .HasColumnName("area_m2");
+
+                    b.Property<MultiPolygon>("Geom")
+                        .IsRequired()
+                        .HasColumnType("geometry(MultiPolygon,4326)")
+                        .HasColumnName("geom");
+
+                    b.Property<bool>("GeometryRepaired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("geometry_repaired");
+
+                    b.Property<DateTimeOffset>("ImportedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("imported_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("metadata_json");
+
+                    b.Property<Guid>("MunicipalityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("municipality_id");
+
+                    b.Property<string>("ReferenceType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("reference_type");
+
+                    b.Property<string>("SourceChecksum")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_checksum");
+
+                    b.Property<string>("SourceCrs")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("source_crs");
+
+                    b.Property<string>("SourceFeatureId")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("source_feature_id");
+
+                    b.Property<string>("SourceLayer")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("source_layer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Geom")
+                        .HasDatabaseName("ix_gis_reference_features_geom");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "GIST");
+
+                    b.HasIndex("MunicipalityId", "ReferenceType")
+                        .HasDatabaseName("ix_gis_reference_features_tenant_type");
+
+                    b.HasIndex("SourceLayer", "SourceFeatureId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_gis_reference_features_source_identity");
+
+                    b.ToTable("gis_reference_features", (string)null);
+                });
+
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Image", b =>
                 {
                     b.Property<Guid>("Id")
@@ -322,17 +551,51 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
+                    b.Property<string>("AffineTransform")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("affine_transform");
+
                     b.Property<decimal?>("AltitudeM")
                         .HasColumnType("numeric(8,2)")
                         .HasColumnName("altitude_m");
+
+                    b.Property<int>("AttemptCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("attempt_count");
+
+                    b.Property<string>("Bucket")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("bucket");
+
+                    b.Property<long>("ByteLength")
+                        .HasColumnType("bigint")
+                        .HasColumnName("byte_length");
 
                     b.Property<decimal?>("CameraHeadingDeg")
                         .HasColumnType("numeric(6,2)")
                         .HasColumnName("camera_heading_deg");
 
+                    b.Property<string>("CaptureTimeSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Missing")
+                        .HasColumnName("capture_time_source");
+
                     b.Property<DateTimeOffset>("CapturedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("captured_at");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -360,23 +623,98 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("is_part_of_ortho");
 
-                    b.Property<double>("Latitude")
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("last_error_code");
+
+                    b.Property<string>("LastErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("last_error_message");
+
+                    b.Property<double?>("Latitude")
                         .HasColumnType("double precision")
                         .HasColumnName("latitude");
 
-                    b.Property<double>("Longitude")
+                    b.Property<string>("LocationSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Missing")
+                        .HasColumnName("location_source");
+
+                    b.Property<double?>("Longitude")
                         .HasColumnType("double precision")
                         .HasColumnName("longitude");
+
+                    b.Property<bool>("MetadataRequiresReview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("metadata_requires_review");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("object_key");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("original_file_name");
+
+                    b.Property<DateTimeOffset?>("ProcessingCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processing_completed_at");
+
+                    b.Property<Guid?>("ProcessingRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("processing_request_id");
+
+                    b.Property<DateTimeOffset?>("ProcessingStartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processing_started_at");
+
+                    b.Property<string>("ProcessingStatus")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("processing_status");
+
+                    b.Property<DateTimeOffset?>("QueuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("queued_at");
+
+                    b.Property<int?>("RasterHeight")
+                        .HasColumnType("integer")
+                        .HasColumnName("raster_height");
+
+                    b.Property<int?>("RasterWidth")
+                        .HasColumnType("integer")
+                        .HasColumnName("raster_width");
 
                     b.Property<string>("Sha256Hash")
                         .IsRequired()
                         .HasColumnType("char(64)")
                         .HasColumnName("sha256_hash");
 
+                    b.Property<string>("SourceRasterCrs")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("source_raster_crs");
+
                     b.Property<string>("StoragePath")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("storage_path");
+
+                    b.Property<DateTimeOffset?>("UploadCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("upload_completed_at");
 
                     b.HasKey("Id");
 
@@ -386,7 +724,175 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "gist");
 
+                    b.HasIndex("ProcessingRequestId")
+                        .IsUnique();
+
                     b.ToTable("images", (string)null);
+                });
+
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.ImageAnalysis", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_number");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<decimal>("ConfidenceThreshold")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("confidence_threshold");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("failure_code");
+
+                    b.Property<string>("FailureMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("failure_message");
+
+                    b.Property<string>("GeoreferencingConfidence")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("georeferencing_confidence");
+
+                    b.Property<string>("GeoreferencingMethod")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("georeferencing_method");
+
+                    b.Property<string>("GeoreferencingStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("georeferencing_status");
+
+                    b.Property<Guid>("ImageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("image_id");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("mode");
+
+                    b.Property<string>("ModelName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("model_name");
+
+                    b.Property<int>("ModelOnlyDetectionCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("model_only_detection_count");
+
+                    b.Property<string>("ModelOnlyDetections")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("model_only_detections");
+
+                    b.Property<string>("ModelVersion")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("model_version");
+
+                    b.Property<string>("OutputCrs")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("output_crs");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<string>("SourceCrs")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("source_crs");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("status");
+
+                    b.Property<double?>("TrustedRoiRadiusM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("trusted_roi_radius_m");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImageId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.ToTable("image_analyses", (string)null);
+                });
+
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.InboxMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("Consumer")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("consumer");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("PayloadHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("payload_hash");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "Consumer")
+                        .IsUnique();
+
+                    b.ToTable("inbox_messages", (string)null);
                 });
 
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Municipality", b =>
@@ -500,6 +1006,47 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.ToTable("notifications", (string)null);
                 });
 
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.NotificationPreference", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<bool>("CandidateViolations")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("candidate_violations");
+
+                    b.Property<bool>("GeneratedReports")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("generated_reports");
+
+                    b.Property<bool>("ProcessingFailures")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("processing_failures");
+
+                    b.Property<bool>("ReviewOutcomes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("review_outcomes");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("notification_preferences", (string)null);
+                });
+
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Orthomosaic", b =>
                 {
                     b.Property<Guid>("Id")
@@ -541,6 +1088,58 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.HasIndex("FlightId");
 
                     b.ToTable("orthomosaics", (string)null);
+                });
+
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<string>("RoutingKey")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("routing_key");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("schema_version");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("type");
+
+                    b.HasKey("EventId");
+
+                    b.HasIndex("PublishedAt");
+
+                    b.ToTable("outbox_messages", (string)null);
                 });
 
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Parcel", b =>
@@ -986,6 +1585,97 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.UserNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTimeOffset?>("DismissedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dismissed_at_utc");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("message");
+
+                    b.Property<Guid>("MunicipalityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("municipality_id");
+
+                    b.Property<string>("NotificationType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("notification_type");
+
+                    b.Property<DateTimeOffset?>("ReadAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at_utc");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_user_id");
+
+                    b.Property<Guid?>("RelatedEntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("related_entity_id");
+
+                    b.Property<string>("RelatedEntityType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("related_entity_type");
+
+                    b.Property<string>("Route")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("route");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("severity");
+
+                    b.Property<string>("SourceEventKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("source_event_key");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MunicipalityId");
+
+                    b.HasIndex("RecipientUserId", "ReadAtUtc")
+                        .HasDatabaseName("ix_user_notifications_unread");
+
+                    b.HasIndex("RecipientUserId", "DismissedAtUtc", "CreatedAtUtc")
+                        .HasDatabaseName("ix_user_notifications_recipient_feed");
+
+                    b.HasIndex("RecipientUserId", "NotificationType", "SourceEventKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_user_notifications_idempotency");
+
+                    b.ToTable("user_notifications", (string)null);
+                });
+
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Video", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1049,6 +1739,10 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("block_id");
 
+                    b.Property<Guid?>("ComplianceEvaluationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("compliance_evaluation_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1082,6 +1776,23 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasColumnType("geometry(MultiPolygon, 4326)")
                         .HasColumnName("geom");
 
+                    b.Property<string>("GeoreferencingConfidence")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("georeferencing_confidence");
+
+                    b.Property<bool>("IsApproximate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_approximate");
+
+                    b.Property<bool>("IsExperimental")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_experimental");
+
                     b.Property<bool>("IsZeroState")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1100,6 +1811,17 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(12,3)")
                         .HasColumnName("required_value");
 
+                    b.Property<bool>("RequiresManualReview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("requires_manual_review");
+
+                    b.Property<string>("ResultSource")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("result_source");
+
                     b.Property<Guid?>("RoadId")
                         .HasColumnType("uuid")
                         .HasColumnName("road_id");
@@ -1107,6 +1829,11 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("RuleId")
                         .HasColumnType("uuid")
                         .HasColumnName("rule_id");
+
+                    b.Property<string>("SourceGeoreferencingMethod")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("source_georeferencing_method");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -1127,6 +1854,9 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BlockId");
+
+                    b.HasIndex("ComplianceEvaluationId")
+                        .IsUnique();
 
                     b.HasIndex("CurrentStatusId");
 
@@ -1362,6 +2092,10 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("is_validated");
 
+                    b.Property<Guid>("MunicipalityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("municipality_id");
+
                     b.Property<string>("RuleKey")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1402,6 +2136,8 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MunicipalityId");
+
                     b.HasIndex("RuleKey")
                         .HasFilter("is_active = true");
 
@@ -1422,7 +2158,14 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ActorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("AeroCompliance.Domain.Entities.Municipality", "Municipality")
+                        .WithMany()
+                        .HasForeignKey("MunicipalityId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Actor");
+
+                    b.Navigation("Municipality");
                 });
 
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Block", b =>
@@ -1436,8 +2179,39 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.Navigation("Zone");
                 });
 
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.ComplianceEvaluation", b =>
+                {
+                    b.HasOne("AeroCompliance.Domain.Entities.Detection", "Detection")
+                        .WithMany("ComplianceEvaluations")
+                        .HasForeignKey("DetectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AeroCompliance.Domain.Entities.ImageAnalysis", "ImageAnalysis")
+                        .WithMany()
+                        .HasForeignKey("ImageAnalysisId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AeroCompliance.Domain.Entities.ZoningRule", "ZoningRule")
+                        .WithMany()
+                        .HasForeignKey("ZoningRuleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Detection");
+
+                    b.Navigation("ImageAnalysis");
+
+                    b.Navigation("ZoningRule");
+                });
+
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Detection", b =>
                 {
+                    b.HasOne("AeroCompliance.Domain.Entities.ImageAnalysis", "ImageAnalysis")
+                        .WithMany("Detections")
+                        .HasForeignKey("ImageAnalysisId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("AeroCompliance.Domain.Entities.Image", "Image")
                         .WithMany()
                         .HasForeignKey("ImageId")
@@ -1449,6 +2223,8 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Image");
+
+                    b.Navigation("ImageAnalysis");
 
                     b.Navigation("Orthomosaic");
                 });
@@ -1483,6 +2259,17 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.Navigation("Flight");
                 });
 
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.GisReferenceFeature", b =>
+                {
+                    b.HasOne("AeroCompliance.Domain.Entities.Municipality", "Municipality")
+                        .WithMany()
+                        .HasForeignKey("MunicipalityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Municipality");
+                });
+
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Image", b =>
                 {
                     b.HasOne("AeroCompliance.Domain.Entities.Flight", "Flight")
@@ -1494,6 +2281,17 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.Navigation("Flight");
                 });
 
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.ImageAnalysis", b =>
+                {
+                    b.HasOne("AeroCompliance.Domain.Entities.Image", "Image")
+                        .WithMany("Analyses")
+                        .HasForeignKey("ImageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Image");
+                });
+
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Notification", b =>
                 {
                     b.HasOne("AeroCompliance.Domain.Entities.Violation", "Violation")
@@ -1502,6 +2300,17 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Violation");
+                });
+
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.NotificationPreference", b =>
+                {
+                    b.HasOne("AeroCompliance.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Orthomosaic", b =>
@@ -1622,6 +2431,25 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.Navigation("Role");
                 });
 
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.UserNotification", b =>
+                {
+                    b.HasOne("AeroCompliance.Domain.Entities.Municipality", "Municipality")
+                        .WithMany()
+                        .HasForeignKey("MunicipalityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AeroCompliance.Domain.Entities.User", "RecipientUser")
+                        .WithMany()
+                        .HasForeignKey("RecipientUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Municipality");
+
+                    b.Navigation("RecipientUser");
+                });
+
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Video", b =>
                 {
                     b.HasOne("AeroCompliance.Domain.Entities.Flight", "Flight")
@@ -1638,6 +2466,11 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.HasOne("AeroCompliance.Domain.Entities.Block", "Block")
                         .WithMany()
                         .HasForeignKey("BlockId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AeroCompliance.Domain.Entities.ComplianceEvaluation", "ComplianceEvaluation")
+                        .WithOne("Violation")
+                        .HasForeignKey("AeroCompliance.Domain.Entities.Violation", "ComplianceEvaluationId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("AeroCompliance.Domain.Entities.ViolationStatus", "CurrentStatus")
@@ -1678,6 +2511,8 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Block");
+
+                    b.Navigation("ComplianceEvaluation");
 
                     b.Navigation("CurrentStatus");
 
@@ -1733,6 +2568,12 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AeroCompliance.Domain.Entities.ZoningRule", b =>
                 {
+                    b.HasOne("AeroCompliance.Domain.Entities.Municipality", "Municipality")
+                        .WithMany()
+                        .HasForeignKey("MunicipalityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("AeroCompliance.Domain.Entities.User", "Validator")
                         .WithMany()
                         .HasForeignKey("ValidatedBy")
@@ -1742,6 +2583,8 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                         .WithMany("ZoningRules")
                         .HasForeignKey("ZoneId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Municipality");
 
                     b.Navigation("Validator");
 
@@ -1753,6 +2596,16 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.Navigation("Parcels");
                 });
 
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.ComplianceEvaluation", b =>
+                {
+                    b.Navigation("Violation");
+                });
+
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.Detection", b =>
+                {
+                    b.Navigation("ComplianceEvaluations");
+                });
+
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Flight", b =>
                 {
                     b.Navigation("Images");
@@ -1762,6 +2615,16 @@ namespace AeroCompliance.Infrastructure.Persistence.Migrations
                     b.Navigation("Orthomosaics");
 
                     b.Navigation("Videos");
+                });
+
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.Image", b =>
+                {
+                    b.Navigation("Analyses");
+                });
+
+            modelBuilder.Entity("AeroCompliance.Domain.Entities.ImageAnalysis", b =>
+                {
+                    b.Navigation("Detections");
                 });
 
             modelBuilder.Entity("AeroCompliance.Domain.Entities.Municipality", b =>

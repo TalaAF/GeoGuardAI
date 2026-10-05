@@ -112,6 +112,7 @@ public class ZoningRuleConfiguration : IEntityTypeConfiguration<ZoningRule>
             t.HasCheckConstraint("ck_zoning_rules_target", "zone_id IS NOT NULL OR zone_type IS NOT NULL"));
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuid_generate_v4()");
+        b.Property(x => x.MunicipalityId).HasColumnName("municipality_id").IsRequired();
         b.Property(x => x.ZoneId).HasColumnName("zone_id");
         b.Property(x => x.ZoneType).HasColumnName("zone_type").HasMaxLength(50);
         b.Property(x => x.RuleKey).HasColumnName("rule_key").HasMaxLength(100).IsRequired();
@@ -127,6 +128,12 @@ public class ZoningRuleConfiguration : IEntityTypeConfiguration<ZoningRule>
 
         // Partial index matching: CREATE INDEX ... ON zoning_rules (rule_key) WHERE is_active = true
         b.HasIndex(x => x.RuleKey).HasFilter("is_active = true");
+        b.HasIndex(x => x.MunicipalityId);
+
+        b.HasOne(x => x.Municipality)
+            .WithMany()
+            .HasForeignKey(x => x.MunicipalityId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         b.HasOne(x => x.Zone)
             .WithMany(z => z.ZoningRules)

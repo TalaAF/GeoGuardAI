@@ -25,6 +25,7 @@ public class AeroComplianceDbContext(DbContextOptions<AeroComplianceDbContext> o
     public DbSet<Parcel> Parcels => Set<Parcel>();
     public DbSet<Road> Roads => Set<Road>();
     public DbSet<ZoningRule> ZoningRules => Set<ZoningRule>();
+    public DbSet<GisReferenceFeature> GisReferenceFeatures => Set<GisReferenceFeature>();
 
     // Flights & media
     public DbSet<Flight> Flights => Set<Flight>();
@@ -32,16 +33,22 @@ public class AeroComplianceDbContext(DbContextOptions<AeroComplianceDbContext> o
     public DbSet<Image> Images => Set<Image>();
     public DbSet<Video> Videos => Set<Video>();
     public DbSet<Orthomosaic> Orthomosaics => Set<Orthomosaic>();
+    public DbSet<ImageAnalysis> ImageAnalyses => Set<ImageAnalysis>();
 
     // AI + violations
     public DbSet<Detection> Detections => Set<Detection>();
     public DbSet<Violation> Violations => Set<Violation>();
     public DbSet<ViolationStatus> ViolationStatuses => Set<ViolationStatus>();
     public DbSet<ViolationStatusHistory> ViolationStatusHistory => Set<ViolationStatusHistory>();
+    public DbSet<ComplianceEvaluation> ComplianceEvaluations => Set<ComplianceEvaluation>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
     // Reporting / notifications / audit
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<PoliceAlert> PoliceAlerts => Set<PoliceAlert>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

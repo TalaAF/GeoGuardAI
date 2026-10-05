@@ -1,13 +1,56 @@
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+
 namespace AeroCompliance.Contracts.Dtos.Auth;
 
 /// <summary>Credentials submitted to obtain an access + refresh token pair.</summary>
-public record LoginRequest(string Email, string Password);
+public sealed class LoginRequest
+{
+    public LoginRequest()
+    {
+    }
+
+    [JsonConstructor]
+    public LoginRequest(string email, string password)
+    {
+        Email = email;
+        Password = password;
+    }
+
+    [Required, EmailAddress]
+    public string Email { get; init; } = null!;
+
+    [Required]
+    public string Password { get; init; } = null!;
+}
 
 /// <summary>Request to exchange a refresh token for a new access token (token rotation).</summary>
-public record RefreshTokenRequest(string RefreshToken);
+public sealed class RefreshTokenRequest
+{
+    public RefreshTokenRequest()
+    {
+    }
+
+    [JsonConstructor]
+    public RefreshTokenRequest(string refreshToken) => RefreshToken = refreshToken;
+
+    [Required]
+    public string RefreshToken { get; init; } = null!;
+}
 
 /// <summary>Request to revoke a refresh token.</summary>
-public record LogoutRequest(string RefreshToken);
+public sealed class LogoutRequest
+{
+    public LogoutRequest()
+    {
+    }
+
+    [JsonConstructor]
+    public LogoutRequest(string refreshToken) => RefreshToken = refreshToken;
+
+    [Required]
+    public string RefreshToken { get; init; } = null!;
+}
 
 /// <summary>Token pair returned by login / refresh.</summary>
 public record TokenResponse(

@@ -6,6 +6,11 @@
     <Project Path="src/AeroCompliance.Domain/AeroCompliance.Domain.csproj" />
     <Project Path="src/AeroCompliance.Infrastructure/AeroCompliance.Infrastructure.csproj" />
     <Project Path="src/AeroCompliance.IngestionService/AeroCompliance.IngestionService.csproj" />
+    <Project Path="src/AeroCompliance.ProcessingService/AeroCompliance.ProcessingService.csproj" />
     <Project Path="src/AeroCompliance.ServiceDefaults/AeroCompliance.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AeroCompliance.UnitTests/AeroCompliance.UnitTests.csproj" />
+    <Project Path="tests/AeroCompliance.IntegrationTests/AeroCompliance.IntegrationTests.csproj" />
   </Folder>
 </Solution>

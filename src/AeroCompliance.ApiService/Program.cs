@@ -7,6 +7,14 @@ using AeroCompliance.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using AeroCompliance.Infrastructure.Notifications;
+using AeroCompliance.Infrastructure.Storage;
+using Microsoft.AspNetCore.Http.Features;
+
+// QuestPDF is source-available under the Community License (NOT MIT); its free tier is
+// eligibility-based and must be re-checked before any production municipal deployment.
+// Declared once at startup, before any report is rendered.
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,8 +34,16 @@ builder.AddNpgsqlDbContext<AeroComplianceDbContext>(
 builder.AddRabbitMQClient(connectionName: "messaging");
 
 // --- AuthN / AuthZ ---------------------------------------------------------
-builder.Services.AddAeroComplianceJwtAuth(builder.Configuration);
+builder.Services.AddAeroComplianceJwtAuth(builder.Configuration, builder.Environment);
 builder.Services.AddAeroComplianceAuthorization();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
+builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddSingleton<IObjectStorage, MinioObjectStorage>();
+builder.Services.AddHostedService<ProcessingOutboxDispatcher>();
+builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit =
+    builder.Configuration.GetValue<long?>("Uploads:MaxBytes") ?? 262_144_000);
 
 // Password hashing (Identity's PasswordHasher only — not the full Identity stack) + auth services.
 builder.Services.AddSingleton<PasswordHasher<User>>();
@@ -44,7 +60,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "AeroCompliance API",
         Version = "v1",
-        Description = "Drone-based municipal compliance platform — Epic 1 scaffold."
+        Description = "Drone-based municipal compliance platform core API."
     });
 
     // Wire the Bearer scheme into Swagger so the "Authorize" button works.
@@ -64,6 +80,14 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+// Development-only GIS import CLI. Runs instead of the web host when invoked as
+//   dotnet run --project src/AeroCompliance.ApiService -- import-gis <dir> [--dry-run]
+// so it never affects normal service startup.
+if (GisImportCommand.Matches(args))
+{
+    return await GisImportCommand.RunAsync(args, app.Services, app.Environment);
+}
 
 // Dev convenience: apply migrations on startup so `dotnet run` yields a ready database.
 // ApiService is the sole migration owner (IngestionService doesn't touch the schema). In
@@ -113,3 +137,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+return 0;
+
+// Exposes the generated top-level Program type to WebApplicationFactory integration tests.
+public partial class Program;

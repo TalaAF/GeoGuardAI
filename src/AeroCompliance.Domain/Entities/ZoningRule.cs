@@ -9,6 +9,9 @@ public class ZoningRule
 {
     public Guid Id { get; set; }
 
+    public Guid MunicipalityId { get; set; }
+    public Municipality Municipality { get; set; } = null!;
+
     /// <summary>Optional: a rule scoped to a specific zone.</summary>
     public Guid? ZoneId { get; set; }
     public Zone? Zone { get; set; }

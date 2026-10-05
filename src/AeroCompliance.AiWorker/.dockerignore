@@ -1,0 +1,4 @@
+.env
+models/*.pt
+__pycache__
+*.pyc

@@ -1,0 +1,5 @@
+-r requirements-geospatial.txt
+# The supplied model is a YOLO26 segmentation checkpoint (saved by Ultralytics 8.4.131) whose
+# Segment26 head does not exist in the 8.3.x line — loading it there fails with
+# "Can't get attribute 'Segment26'". The floor is therefore the version that introduced it.
+ultralytics>=8.4.131,<9

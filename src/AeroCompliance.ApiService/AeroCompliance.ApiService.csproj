@@ -9,8 +9,23 @@
   <ItemGroup>
     <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.4.6" />
     <PackageReference Include="Aspire.RabbitMQ.Client" Version="13.4.6" />
+    <!-- Pure-managed EXIF/XMP reader used to auto-extract JPEG capture metadata on upload (Phase 5). -->
+    <PackageReference Include="MetadataExtractor" Version="2.8.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <!--
+      Violation-report PDF rendering (Phase 6). QuestPDF is a pure-.NET document library. It
+      bundles its own text shaping/fonts, so report output does not depend on fonts installed on
+      the host — unlike GDI-backed alternatives.
+
+      LICENSING — NOT MIT. QuestPDF is source-available under the QuestPDF Community License,
+      whose free tier is eligibility-based (assessed on organisation revenue/size, not on use).
+      Current academic/development use must be checked against those terms, and a production
+      municipal or government deployment requires an explicit licensing decision or a replacement
+      library. See https://www.questpdf.com/license/community.html and
+      https://www.questpdf.com/license/guide.html
+    -->
+    <PackageReference Include="QuestPDF" Version="2026.8.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
     <!-- Unify EF Core to 10.0.10 (Aspire's Npgsql EF integration pulls 10.0.8 transitively). -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
