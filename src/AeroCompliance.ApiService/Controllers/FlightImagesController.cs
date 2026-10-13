@@ -40,7 +40,8 @@ public sealed class FlightImagesController(AeroComplianceDbContext db, ICurrentU
         if (file is null || file.Length <= 0) return Problem(statusCode: 400, title: "An image file is required.");
         var maxBytes = configuration.GetValue<long?>("Uploads:MaxBytes") ?? 262_144_000;
         if (file.Length > maxBytes) return Problem(statusCode: 413, title: "Upload is too large.");
-        if (!ValidFile(file, environment.IsDevelopment(), out var contentType)) return Problem(statusCode: 415, title: "Unsupported image format.");
+        var demoMode = environment.IsDevelopment() || configuration.GetValue<bool>("DemoMode:Enabled");
+        if (!ValidFile(file, demoMode, out var contentType)) return Problem(statusCode: 415, title: "Unsupported image format.");
         if (!ValidScenario(form.MockScenario)) return Problem(statusCode: 400, title: "Invalid mockScenario.");
         if (form.Latitude.HasValue ^ form.Longitude.HasValue) return Problem(statusCode: 400, title: "Latitude and longitude must be supplied together.");
         if (form.Latitude is double lat && (double.IsNaN(lat) || double.IsInfinity(lat))) return Problem(statusCode: 400, title: "Latitude must be a finite number.");
@@ -72,7 +73,7 @@ public sealed class FlightImagesController(AeroComplianceDbContext db, ICurrentU
             await storage.UploadFileAsync(key, temp, contentType, ct); stored = true;
             var message = new ImageProcessingRequested(requestId, 1, requestId, null, now, requestId, imageId, flightId,
                 flight.MunicipalityId, storage.Bucket, key, hash, contentType, metadata.CapturedAt, metadata.Latitude, metadata.Longitude,
-                environment.IsDevelopment() ? form.MockScenario?.Trim().ToLowerInvariant() : null,
+                demoMode ? form.MockScenario?.Trim().ToLowerInvariant() : null,
                 metadata.LocationSource, metadata.CaptureTimeSource);
             var image = new Image { Id = imageId, FlightId = flightId, StoragePath = key, Bucket = storage.Bucket, ObjectKey = key,
                 OriginalFileName = original, ContentType = contentType, ByteLength = actualLength, Sha256Hash = hash,

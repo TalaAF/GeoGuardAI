@@ -50,6 +50,7 @@ builder.Services.AddSingleton<PasswordHasher<User>>();
 builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddScoped<DevUserSeeder>();
+builder.Services.AddScoped<DemoDataSeeder>();
 
 // --- MVC + OpenAPI ---------------------------------------------------------
 builder.Services.AddControllers();
@@ -93,7 +94,11 @@ if (GisImportCommand.Matches(args))
 // ApiService is the sole migration owner (IngestionService doesn't touch the schema). In
 // non-dev environments, run migrations as a deliberate deploy step instead — and pre-provision
 // the PostGIS extension where the app user lacks CREATE EXTENSION rights.
-if (app.Environment.IsDevelopment())
+var applyMigrations = app.Environment.IsDevelopment()
+    || builder.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup");
+var seedDemo = app.Environment.IsDevelopment()
+    || builder.Configuration.GetValue<bool>("DemoSeed:Enabled");
+if (applyMigrations)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AeroComplianceDbContext>();
@@ -102,9 +107,15 @@ if (app.Environment.IsDevelopment())
     {
         await db.Database.MigrateAsync();
 
-        // DEV-ONLY: seed one test user per role (roles + pilot municipality come from HasData).
-        var seeder = scope.ServiceProvider.GetRequiredService<DevUserSeeder>();
-        await seeder.SeedAsync();
+        if (seedDemo)
+        {
+            // Local/demo-only accounts and synthetic records. Production deployments must leave
+            // DemoSeed:Enabled false and manage identities/data explicitly.
+            var userSeeder = scope.ServiceProvider.GetRequiredService<DevUserSeeder>();
+            await userSeeder.SeedAsync();
+            var dataSeeder = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
+            await dataSeeder.SeedAsync();
+        }
     }
     catch (Exception ex)
     {
@@ -129,7 +140,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(o => o.SwaggerEndpoint("/swagger/v1/swagger.json", "AeroCompliance API v1"));
 }
 
-app.UseHttpsRedirection();
+if (builder.Configuration.GetValue("HttpsRedirection:Enabled", true))
+    app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
