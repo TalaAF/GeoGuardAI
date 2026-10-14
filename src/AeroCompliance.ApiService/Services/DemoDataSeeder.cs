@@ -63,8 +63,8 @@ public sealed class DemoDataSeeder(AeroComplianceDbContext db, ILogger<DemoDataS
             db.Flights.Add(new Flight
             {
                 Id = FlightId, MunicipalityId = SeedData.PilotMunicipalityId,
-                DroneOperatorId = operatorId, MissionName = "Synthetic local demonstration flight",
-                PlannedArea = area, Status = FlightStatus.Planned, ScheduledAt = now,
+                DroneOperatorId = operatorId, MissionName = "SYNTHETIC DEMO - Follow-up site visit",
+                PlannedArea = area, Status = FlightStatus.Planned, ScheduledAt = now.AddDays(2),
                 QualityFlag = true, CreatedAt = now
             });
 

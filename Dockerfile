@@ -111,6 +111,8 @@ COPY deploy/single-container/run-postgres.sh /opt/aerocompliance/bin/run-postgre
 COPY deploy/single-container/run-rabbitmq.sh /opt/aerocompliance/bin/run-rabbitmq
 COPY deploy/single-container/wait-for-stack.sh /opt/aerocompliance/bin/wait-for-stack
 COPY deploy/single-container/healthcheck.sh /opt/aerocompliance/bin/healthcheck
+COPY deploy/single-container/demo-seed.py /opt/aerocompliance/demo-seed.py
+COPY deploy/single-container/demo-assets/ /opt/aerocompliance/demo-assets/
 
 RUN chmod 0755 \
         /usr/local/bin/aerocompliance-entrypoint \

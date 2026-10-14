@@ -27,6 +27,7 @@ if [[ ! -s "${config_file}" ]]; then
         printf 'MINIO_SECRET_KEY=%s\n' "$(openssl rand -hex 24)"
         printf 'JWT_SIGNING_KEY=%s\n' "$(openssl rand -hex 48)"
         printf 'DEMO_PASSWORD=Demo-%s\n' "$(openssl rand -hex 10)"
+        printf 'DEMO_SCENARIO_ENABLED=1\n'
     } > "${temp_config}"
     mv "${temp_config}" "${config_file}"
     chmod 0600 "${config_file}"
@@ -78,7 +79,11 @@ export Jwt__SigningKey="${JWT_SIGNING_KEY}"
 export Jwt__AccessTokenMinutes=30
 export Jwt__RefreshTokenDays=7
 export Database__ApplyMigrationsOnStartup=true
-export DemoSeed__Enabled=true
+if [[ "${DEMO_SCENARIO_ENABLED:-0}" == 1 && ! -f "${config_dir}/demo-scenario-v1.done" ]]; then
+    export DemoSeed__Enabled=true
+else
+    export DemoSeed__Enabled=false
+fi
 export DemoSeed__Password="${DEMO_PASSWORD}"
 export DemoMode__Enabled=true
 export HealthChecks__Expose=true

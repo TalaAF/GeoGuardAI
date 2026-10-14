@@ -111,7 +111,7 @@ public sealed class FlightImagesController(AeroComplianceDbContext db, ICurrentU
         x.CapturedAt, x.Latitude, x.Longitude, x.AltitudeM, x.CameraHeadingDeg, x.GpsAccuracyCm, x.ProcessingStatus.ToString(), x.AttemptCount, x.UploadCompletedAt, x.CreatedAt,
         x.LocationSource, x.CaptureTimeSource, x.MetadataRequiresReview, x.SourceRasterCrs, x.RasterWidth, x.RasterHeight);
     private static string Sanitize(string name) { var clean = Path.GetFileName(name); foreach (var c in Path.GetInvalidFileNameChars()) clean = clean.Replace(c, '_'); return string.IsNullOrWhiteSpace(clean) ? "image" : clean[..Math.Min(clean.Length, 255)]; }
-    private static bool ValidScenario(string? value) => string.IsNullOrWhiteSpace(value) || new[] { "none", "building", "road_encroachment", "parcel_encroachment", "failure" }.Contains(value.Trim().ToLowerInvariant());
+    private static bool ValidScenario(string? value) => string.IsNullOrWhiteSpace(value) || new[] { "none", "building", "road", "road_encroachment", "parcel_encroachment", "failure" }.Contains(value.Trim().ToLowerInvariant());
 
     /// <summary>
     /// Phase 5 metadata precedence: valid GeoTIFF georeferencing (discovered later, asynchronously, by
