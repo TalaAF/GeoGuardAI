@@ -95,6 +95,9 @@ COPY --from=ai-worker /usr/local /usr/local
 COPY --from=ai-worker /app/aerocompliance_ai /opt/aerocompliance/ai/aerocompliance_ai
 COPY --from=frontend-build /frontend/dist /opt/aerocompliance/frontend
 COPY --from=minio-build /out/minio /usr/local/bin/minio
+COPY src/AeroCompliance.AiWorker/models/best.pt /opt/aerocompliance/models/best.pt
+RUN echo '577ec6f619b5e22a462b0ac62d5a55722cded832ea07fbaf70f01d93786479f8  /opt/aerocompliance/models/best.pt' | sha256sum -c - \
+    && chmod 0644 /opt/aerocompliance/models/best.pt
 RUN minio_machine="$(od -An -tu2 -j18 -N2 /usr/local/bin/minio | tr -d '[:space:]')" \
     && case "${TARGETARCH}:${minio_machine}" in \
          amd64:62|arm64:183) ;; \
@@ -107,6 +110,7 @@ COPY deploy/single-container/entrypoint.sh /usr/local/bin/aerocompliance-entrypo
 COPY deploy/single-container/run-api.sh /opt/aerocompliance/bin/run-api
 COPY deploy/single-container/run-processing.sh /opt/aerocompliance/bin/run-processing
 COPY deploy/single-container/run-ai-worker.sh /opt/aerocompliance/bin/run-ai-worker
+COPY deploy/single-container/run-nginx.sh /opt/aerocompliance/bin/run-nginx
 COPY deploy/single-container/run-postgres.sh /opt/aerocompliance/bin/run-postgres
 COPY deploy/single-container/run-rabbitmq.sh /opt/aerocompliance/bin/run-rabbitmq
 COPY deploy/single-container/wait-for-stack.sh /opt/aerocompliance/bin/wait-for-stack
@@ -119,6 +123,7 @@ RUN chmod 0755 \
         /opt/aerocompliance/bin/run-api \
         /opt/aerocompliance/bin/run-processing \
         /opt/aerocompliance/bin/run-ai-worker \
+        /opt/aerocompliance/bin/run-nginx \
         /opt/aerocompliance/bin/run-postgres \
         /opt/aerocompliance/bin/run-rabbitmq \
         /opt/aerocompliance/bin/wait-for-stack \

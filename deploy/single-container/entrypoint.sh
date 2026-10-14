@@ -14,6 +14,7 @@ install -d -o aerocompliance -g aerocompliance \
     "${data_root}/app/matplotlib" "${data_root}/app/config"
 install -d -o rabbitmq -g rabbitmq /run/rabbitmq
 install -d -o postgres -g postgres /run/postgresql
+install -d -o aerocompliance -g aerocompliance /run/aerocompliance
 install -d -o www-data -g www-data \
     /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi \
     /var/lib/nginx/uwsgi /var/lib/nginx/scgi
@@ -81,18 +82,25 @@ export Jwt__RefreshTokenDays=7
 export Database__ApplyMigrationsOnStartup=true
 if [[ "${DEMO_SCENARIO_ENABLED:-0}" == 1 && ! -f "${config_dir}/demo-scenario-v1.done" ]]; then
     export DemoSeed__Enabled=true
+    export DEMO_SCENARIO_PENDING=1
 else
     export DemoSeed__Enabled=false
+    export DEMO_SCENARIO_PENDING=0
 fi
 export DemoSeed__Password="${DEMO_PASSWORD}"
 export DemoMode__Enabled=true
 export HealthChecks__Expose=true
 export HttpsRedirection__Enabled=false
 
-export AI_MODE="${AEROCOMPLIANCE_AI_MODE:-mock}"
-export AI_MODEL_PATH="${data_root}/models/best.pt"
+export AI_MODE="${AEROCOMPLIANCE_AI_MODE-yolo}"
+export AI_MODEL_PATH=/opt/aerocompliance/models/best.pt
 export AI_CONFIDENCE_THRESHOLD=0.25
-export AI_MODEL_NAME="${AEROCOMPLIANCE_AI_MODEL_NAME:-aerocompliance-mock}"
+if [[ "${AI_MODE}" == "yolo" ]]; then
+    default_model_name=aerocompliance-yolo26m-seg
+else
+    default_model_name=aerocompliance-mock
+fi
+export AI_MODEL_NAME="${AEROCOMPLIANCE_AI_MODEL_NAME:-${default_model_name}}"
 export AI_MODEL_VERSION="${AEROCOMPLIANCE_AI_MODEL_VERSION:-1.0}"
 export RABBITMQ_URL="${ConnectionStrings__messaging}"
 export MINIO_ENDPOINT=http://127.0.0.1:9000
@@ -108,10 +116,11 @@ if [[ "${AI_MODE}" != "mock" && "${AI_MODE}" != "yolo" ]]; then
     exit 1
 fi
 if [[ "${AI_MODE}" == "yolo" && ! -f "${AI_MODEL_PATH}" ]]; then
-    echo "ERROR: Real YOLO mode requested but ${AI_MODEL_PATH} is missing." >&2
-    echo "Copy best.pt into the named volume at models/best.pt, then restart the container." >&2
+    echo "ERROR: Bundled YOLO checkpoint is missing: ${AI_MODEL_PATH}." >&2
     exit 1
 fi
+rm -f /run/aerocompliance/public-ready
+rm -f /run/aerocompliance/demo-seed-complete
 
 chown -R postgres:postgres "${data_root}/postgres"
 chmod 0700 "${data_root}/postgres"
@@ -124,9 +133,9 @@ echo " URL: http://localhost:8080"
 echo " Demo login: admin@aerocompliance.test"
 echo " Demo password: ${DEMO_PASSWORD}"
 if [[ "${AI_MODE}" == "mock" ]]; then
-    echo " AI MODE: MOCK - deterministic demo output; not real-model accuracy evidence."
+    echo " AI MODE CONFIGURED: MOCK - deterministic demo output; not real-model accuracy evidence."
 else
-    echo " AI MODE: YOLO - model: ${AI_MODEL_PATH}"
+    echo " AI MODE CONFIGURED: YOLO - bundled checkpoint: ${AI_MODEL_PATH}"
 fi
 if [[ "${first_start}" == true ]]; then
     echo " Generated first-start settings at ${config_file}"

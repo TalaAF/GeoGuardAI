@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-BASE = "http://127.0.0.1:8080"
+BASE = "http://127.0.0.1:8081"
 MUNICIPALITY_ID = "11111111-1111-1111-1111-111111111111"
 DATA_ROOT = Path(os.environ.get("AEROCOMPLIANCE_DATA_ROOT", "/var/lib/aerocompliance"))
 MARKER = DATA_ROOT / "config" / "demo-scenario-v1.done"
@@ -234,6 +234,7 @@ def seed():
     temporary = MARKER.with_suffix(".tmp")
     temporary.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     os.replace(temporary, MARKER)
+    Path("/run/aerocompliance/demo-seed-complete").touch()
     print("Demo scenario: ready (3 completed flights, 4 processed aerial images, "
           "2 pending candidates, 1 labelled sample PDF).", flush=True)
 
@@ -241,8 +242,5 @@ def seed():
 if __name__ == "__main__":
     if os.environ.get("DEMO_SCENARIO_ENABLED") != "1" or MARKER.exists():
         print("Demo scenario: existing volume; no data changed.", flush=True)
-    elif os.environ.get("AI_MODE") != "mock":
-        MARKER.write_text("Synthetic scenario skipped: AI_MODE is not mock.\n", encoding="utf-8")
-        print("Demo scenario: skipped because AI_MODE is not mock.", flush=True)
     else:
         seed()

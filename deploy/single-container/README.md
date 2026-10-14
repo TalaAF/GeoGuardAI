@@ -26,12 +26,37 @@ The first-start marker is stored in the same data volume, so restarting or updat
 image preserves credentials, reviews, reports, and other user data. Existing volumes are
 not backfilled with this scenario.
 
-The default AI mode is clearly logged as **MOCK** and is not model-accuracy evidence. The image has
-the real YOLO runtime but not the project-specific weights. To enable it, copy `best.pt` to
-`/var/lib/aerocompliance/models/best.pt` in the named volume and recreate the container with
-`-e AEROCOMPLIANCE_AI_MODE=yolo`. The build below publishes `latest` and
-`2026.10.14-demo-scenario-multiarch` for Linux AMD64 and ARM64. It does not modify the
-existing `2026.10.09-demo-amd64` tag.
+The default AI mode for new jobs is **YOLO**. The image includes the project checkpoint at
+`/opt/aerocompliance/models/best.pt` (SHA-256
+`577ec6f619b5e22a462b0ac62d5a55722cded832ea07fbaf70f01d93786479f8`). No extra model
+mount or environment setting is needed. A new volume first initializes its explicitly synthetic
+scenario using a temporary mock worker; the public endpoint opens only after that finishes and
+the selected worker is ready. Those historical results remain labelled `MockGeographicScenario`.
+They are never attributed to YOLO or used as accuracy evidence. YOLO predictions from ordinary
+PNG/JPEG images without a raster georeference remain model-only; they cannot create geographic
+compliance candidates from invented coordinates.
+The checkpoint remains Git-ignored; rebuilding the image from source requires the authorized
+`src/AeroCompliance.AiWorker/models/best.pt` file with the SHA-256 above in the build context.
+
+To start in mock mode, add `-e AEROCOMPLIANCE_AI_MODE=mock` to `docker run`. Only `yolo` and `mock`
+are valid. The configured and active modes are printed in `docker logs`. **Switching modes requires
+recreating the container with the same named volume**; a restart of the same container keeps its
+original environment. For example, after a run using the volume `aerocompliance-data`:
+
+```sh
+docker stop aerocompliance
+docker rm aerocompliance
+docker run -d --name aerocompliance --restart unless-stopped \
+  -p 8080:8080 \
+  -v aerocompliance-data:/var/lib/aerocompliance \
+  -e AEROCOMPLIANCE_AI_MODE=mock \
+  tala211/aerocompliance:latest
+```
+
+This keeps credentials, flights, reports, reviews, and old detection provenance. To switch back,
+recreate the container again with the same volume and omit the `-e` option. The build below
+publishes `2026.10.14-yolo-default-multiarch` for Linux AMD64 and ARM64, then promotes it to
+`latest` after release checks. It does not modify older fixed tags.
 
 ## Build and publish the multi-architecture image
 
@@ -42,9 +67,9 @@ docker buildx create --name aerocompliance-multiarch --driver docker-container -
 docker buildx inspect --bootstrap
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  -t tala211/aerocompliance:2026.10.14-demo-scenario-multiarch \
+  -t tala211/aerocompliance:2026.10.14-yolo-default-multiarch \
   --push .
-docker buildx imagetools inspect tala211/aerocompliance:2026.10.14-demo-scenario-multiarch
+docker buildx imagetools inspect tala211/aerocompliance:2026.10.14-yolo-default-multiarch
 ```
 
 The inspection must list `linux/amd64` and `linux/arm64`. Buildx may add
@@ -55,7 +80,7 @@ including review and PDF download, before promoting it to `latest`:
 ```sh
 docker buildx imagetools create \
   -t tala211/aerocompliance:latest \
-  tala211/aerocompliance:2026.10.14-demo-scenario-multiarch
+  tala211/aerocompliance:2026.10.14-yolo-default-multiarch
 docker buildx imagetools inspect tala211/aerocompliance:latest
 ```
 
