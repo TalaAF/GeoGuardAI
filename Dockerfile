@@ -1,13 +1,68 @@
 # syntax=docker/dockerfile:1.7
 
-FROM --platform=$TARGETPLATFORM tala211/aerocompliance-api:2026.10.08-amd64 AS api
-FROM --platform=$TARGETPLATFORM tala211/aerocompliance-processing:2026.10.08-amd64 AS processing
-FROM --platform=$TARGETPLATFORM tala211/aerocompliance-ai-worker:2026.10.08-amd64 AS ai-worker
-FROM --platform=$TARGETPLATFORM tala211/aerocompliance-frontend:2026.10.08-amd64 AS frontend
-FROM --platform=$TARGETPLATFORM tala211/aerocompliance-minio:2025.09.07-amd64 AS minio
+# Compile both .NET services for the requested Linux architecture on the build host.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS dotnet-build
+ARG TARGETARCH
+WORKDIR /src
+COPY src/ ./src/
+RUN dotnet restore src/AeroCompliance.ApiService/AeroCompliance.ApiService.csproj -a $TARGETARCH \
+    && dotnet restore src/AeroCompliance.ProcessingService/AeroCompliance.ProcessingService.csproj -a $TARGETARCH
+RUN dotnet publish src/AeroCompliance.ApiService/AeroCompliance.ApiService.csproj \
+        --configuration Release --no-restore --output /out/api /p:UseAppHost=false -a $TARGETARCH \
+    && dotnet publish src/AeroCompliance.ProcessingService/AeroCompliance.ProcessingService.csproj \
+        --configuration Release --no-restore --output /out/processing /p:UseAppHost=false -a $TARGETARCH
+
+FROM --platform=$TARGETPLATFORM mcr.microsoft.com/dotnet/aspnet:10.0 AS dotnet-runtime
+
+# Vite produces architecture-independent browser assets.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-build
+WORKDIR /frontend
+COPY src/AeroCompliance.Frontend/package.json src/AeroCompliance.Frontend/package-lock.json ./
+RUN npm ci
+COPY src/AeroCompliance.Frontend/ ./
+RUN npm run build
+
+# Install native Python wheels on the target platform. Match the final Debian release
+# so the copied Python interpreter and its shared libraries remain compatible.
+FROM --platform=$TARGETPLATFORM python:3.12-slim-trixie AS ai-worker
+ARG AI_REQUIREMENTS=requirements-yolo.txt
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libexpat1 libxcb1 libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+COPY src/AeroCompliance.AiWorker/requirements.txt \
+     src/AeroCompliance.AiWorker/requirements-geospatial.txt \
+     src/AeroCompliance.AiWorker/requirements-yolo.txt ./
+RUN if [ "${AI_REQUIREMENTS}" = "requirements-yolo.txt" ]; then \
+        pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+            "torch>=2.4,<3" "torchvision>=0.19,<1"; \
+    fi \
+    && pip install --no-cache-dir -r "${AI_REQUIREMENTS}"
+COPY src/AeroCompliance.AiWorker/aerocompliance_ai ./aerocompliance_ai
+
+# Compile MinIO for the requested target, even when this stage runs on the
+# Buildx builder's architecture. Select Go's exact native or cross-build path.
+FROM --platform=$BUILDPLATFORM golang:1.24-bookworm AS minio-build
+ARG TARGETARCH
+ARG MINIO_RELEASE=RELEASE.2025-09-07T16-13-09Z
+ENV CGO_ENABLED=0 GOOS=linux
+RUN GOARCH="${TARGETARCH}" go install -tags kqueue -trimpath \
+    --ldflags "-s -w \
+      -X github.com/minio/minio/cmd.Version=2025-09-07T16:13:09Z \
+      -X github.com/minio/minio/cmd.CopyrightYear=2025 \
+      -X github.com/minio/minio/cmd.ReleaseTag=${MINIO_RELEASE} \
+      -X github.com/minio/minio/cmd.CommitID=07c3a429bfed \
+      -X github.com/minio/minio/cmd.ShortCommitID=07c3a429bfed" \
+    "github.com/minio/minio@${MINIO_RELEASE}" \
+    && mkdir -p /out \
+    && if [ "${TARGETARCH}" = "$(go env GOHOSTARCH)" ]; then \
+        minio_binary=/go/bin/minio; \
+       else \
+        minio_binary="/go/bin/linux_${TARGETARCH}/minio"; \
+       fi \
+    && install -m 0755 "${minio_binary}" /out/minio
 
 FROM --platform=$TARGETPLATFORM debian:trixie-slim
-
 ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="AeroCompliance self-contained demo" \
@@ -31,15 +86,20 @@ RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
     && useradd --system --home-dir /var/lib/aerocompliance/app --shell /usr/sbin/nologin aerocompliance \
     && rm -rf /var/lib/postgresql/* /var/lib/rabbitmq /var/lib/nginx /var/log/nginx /var/log/postgresql
 
-COPY --from=api /usr/share/dotnet /usr/share/dotnet
+COPY --from=dotnet-runtime /usr/share/dotnet /usr/share/dotnet
 RUN ln -s /usr/share/dotnet/dotnet /usr/local/bin/dotnet
 
-COPY --from=api /app /opt/aerocompliance/api
-COPY --from=processing /app /opt/aerocompliance/processing
+COPY --from=dotnet-build /out/api /opt/aerocompliance/api
+COPY --from=dotnet-build /out/processing /opt/aerocompliance/processing
 COPY --from=ai-worker /usr/local /usr/local
 COPY --from=ai-worker /app/aerocompliance_ai /opt/aerocompliance/ai/aerocompliance_ai
-COPY --from=frontend /usr/share/nginx/html /opt/aerocompliance/frontend
-COPY --from=minio /usr/local/bin/minio /usr/local/bin/minio
+COPY --from=frontend-build /frontend/dist /opt/aerocompliance/frontend
+COPY --from=minio-build /out/minio /usr/local/bin/minio
+RUN minio_machine="$(od -An -tu2 -j18 -N2 /usr/local/bin/minio | tr -d '[:space:]')" \
+    && case "${TARGETARCH}:${minio_machine}" in \
+         amd64:62|arm64:183) ;; \
+         *) echo "MinIO ELF architecture ${minio_machine} does not match ${TARGETARCH}" >&2; exit 1 ;; \
+       esac
 
 COPY deploy/single-container/supervisord.conf /etc/supervisor/supervisord.conf
 COPY deploy/single-container/nginx.conf /etc/nginx/nginx.conf
